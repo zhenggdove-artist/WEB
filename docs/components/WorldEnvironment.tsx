@@ -26,12 +26,12 @@ export const PLANET_CONFIG = {
   // --- TENTACLE SETTINGS (觸手設定) ---
   tentacleCount: 100, 
   tentacleRootColor: "#ffe733", 
-  tentacleTipColor1: "#33ddffff", 
-  tentacleTipColor2: "#61cffbff", 
-  tentacleRadiusMin: 2, 
-  tentacleRadiusMax: 10, 
+  tentacleTipColor1: "#ffe733", 
+  tentacleTipColor2: "#ffe733", 
+  tentacleRadiusMin: 5, 
+  tentacleRadiusMax: 15, 
   tentacleBaseLength: 3, 
-  tentacleLengthJitter: 3 
+  tentacleLengthJitter: 10 
 };
 
 // --- TENTACLE INTERNAL SETTINGS ---
