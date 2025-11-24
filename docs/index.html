@@ -431,7 +431,7 @@ const BreathMaterial = {
     `
 };
 
-const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
+const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React.RefObject<Group> }) => {
     const meshRef = useRef<THREE.Points>(null);
     const [state, setState] = useState<'IDLE' | 'PRE_FIRE' | 'FIRING' | 'COOLDOWN'>('IDLE');
     
@@ -529,6 +529,9 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             mat.uniforms.uFireScale.value = progress.current;
             // Hide mesh if idle
             meshRef.current.visible = state === 'FIRING' || state === 'COOLDOWN'; 
+            // Counter jaw pitch so flame stays horizontal (slight upward bias)
+            const jawAngle = jawRef?.current ? jawRef.current.rotation.x : 0;
+            meshRef.current.rotation.x = -jawAngle + 0.05;
         }
     });
 
@@ -553,7 +556,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
 };
 
 const TRexModel: React.FC<any> = ({ 
-    leftLegRef, rightLegRef, leftArmRef, rightArmRef, jawRef,
+    leftLegRef, rightLegRef, leftArmRef, rightArmRef, jawRef, upperJawRef,
     tailBaseRef, tailMidRef, tailTipRef, breathStatus 
 }) => {
   const skinColor = "#00ff66"; 
@@ -574,17 +577,19 @@ const TRexModel: React.FC<any> = ({
     <group rotation={[0, Math.PI, 0]} scale={[0.8, 0.8, 0.8]}>
       <group>
           <group position={[0, 4.2, 2.2]}>
-            <PointsShape geometry={new BoxGeometry(1.5, 1.4, 1.5, 12, 12, 12)} position={[0, 0.2, 0]} color={skinColor} {...materialProps} />
-            <PointsShape geometry={new CylinderGeometry(0.5, 0.75, 1.6, 12, 8)} position={[0, 0.1, 1.5]} rotation={[1.57, 0, 0]} color={skinColor} {...materialProps} />
-            <PointsShape geometry={new BoxGeometry(0.8, 0.2, 1.4, 8, 2, 8)} position={[0, -0.4, 1.2]} color={gumColor} size={0.04} />
-            <group position={[0, -0.4, 1.2]}>
-                <TeethRow count={8} radius={0.45} color={teethColor} inverted={false} />
-            </group>
-            
-            <BlinkingEyes position={[0, 0, 0]} />
+            <group ref={upperJawRef}>
+                <PointsShape geometry={new BoxGeometry(1.5, 1.4, 1.5, 12, 12, 12)} position={[0, 0.2, 0]} color={skinColor} {...materialProps} />
+                <PointsShape geometry={new CylinderGeometry(0.5, 0.75, 1.6, 12, 8)} position={[0, 0.1, 1.5]} rotation={[1.57, 0, 0]} color={skinColor} {...materialProps} />
+                <PointsShape geometry={new BoxGeometry(0.8, 0.2, 1.4, 8, 2, 8)} position={[0, -0.4, 1.2]} color={gumColor} size={0.04} />
+                <group position={[0, -0.4, 1.2]}>
+                    <TeethRow count={8} radius={0.45} color={teethColor} inverted={false} />
+                </group>
+                
+                <BlinkingEyes position={[0, 0, 0]} />
 
-            <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[0.6, 0.65, 0.4]} rotation={[0, 0, 0.2]} color="#004400" size={0.04} /> 
-            <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[-0.6, 0.65, 0.4]} rotation={[0, 0, -0.2]} color="#004400" size={0.04} />
+                <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[0.6, 0.65, 0.4]} rotation={[0, 0, 0.2]} color="#004400" size={0.04} /> 
+                <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[-0.6, 0.65, 0.4]} rotation={[0, 0, -0.2]} color="#004400" size={0.04} />
+            </group>
 
             <group position={[0, -0.4, 0.2]} rotation={[0.2, 0, 0]} ref={jawRef}>
                 <PointsShape geometry={new CylinderGeometry(0.4, 0.6, 1.6, 12, 8)} position={[0, 0, 1.0]} rotation={[1.57, 0, 0]} color={detailColor} {...materialProps} />
@@ -595,7 +600,7 @@ const TRexModel: React.FC<any> = ({
                 </group>
 
                 {/* --- FIRE BREATH --- */}
-                <DinoBreath breathStatus={breathStatus} />
+                <DinoBreath breathStatus={breathStatus} jawRef={jawRef} />
 
             </group>
           </group>
@@ -659,6 +664,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const leftArmRef = useRef<Group>(null);
   const rightArmRef = useRef<Group>(null);
   const jawRef = useRef<Group>(null); 
+  const upperJawRef = useRef<Group>(null);
   const tailBaseRef = useRef<Group>(null);
   const tailMidRef = useRef<Group>(null);
   const tailTipRef = useRef<Group>(null);
@@ -739,11 +745,20 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     if (jawRef.current) {
         if (breathStatus.current.isFiring) {
             // Force jaw open wide when firing
-             jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, 0.95, 0.45);
+             jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, 0.9, 0.45);
         } else {
             // Normal breathing / moving
             const targetJawRot = isMoving ? 0.4 + Math.sin(time * 8) * 0.15 : 0.2 + Math.sin(time * 2) * 0.05;
             jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, targetJawRot, 0.18);
+        }
+    }
+
+    if (upperJawRef.current) {
+        if (breathStatus.current.isFiring) {
+            upperJawRef.current.rotation.x = MathUtils.lerp(upperJawRef.current.rotation.x, -0.35, 0.35);
+        } else {
+            const upperTarget = isMoving ? -0.05 + Math.sin(time * 5) * 0.02 : Math.sin(time * 1.2) * 0.01;
+            upperJawRef.current.rotation.x = MathUtils.lerp(upperJawRef.current.rotation.x, upperTarget, 0.14);
         }
     }
 
@@ -814,6 +829,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
         leftArmRef={leftArmRef}
         rightArmRef={rightArmRef}
         jawRef={jawRef}
+        upperJawRef={upperJawRef}
         tailBaseRef={tailBaseRef}
         tailMidRef={tailMidRef}
         tailTipRef={tailTipRef}
