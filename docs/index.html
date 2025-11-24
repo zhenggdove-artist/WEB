@@ -284,7 +284,7 @@ import * as THREE from 'three';
 // --- [可修改] 恐龍火焰噴射長度與設定 ---
 const BREATH_CONFIG = {
     length: 6.0,       // 火焰噴射的最大距離 (長度)
-    speed: 0.27,        // 火焰粒子的飛行速度 (提高以加快水平噴射)
+    speed: 1.5,        // 火焰粒子的飛行速度 (提高以加快水平噴射)
     spread: 1.1,        // 火焰擴散的寬度 (錐形角度)
     particleSize: 0.3,  // 每個火焰點的大小
     offset: { x: 0, y: 1, z: 1.2 } // 發射點相對於下顎的位置
@@ -385,12 +385,14 @@ const BreathMaterial = {
         void main() {
             vColor = aColor;
             
-            // Age creates the forward movement loop
-            float age = mod(uTime * uSpeed + aOffset, uLength);
+            // Forward travel scales with uSpeed and per-particle velocity
+            float travel = (uTime * uSpeed + aOffset) * aVelocity.z;
+            // Loop within length to keep a continuous stream
+            float age = mod(travel, uLength);
             
             vec3 pos = position;
             // Move particles forward
-            pos.z += age * aVelocity.z; 
+            pos.z += age; 
             
             // --- DYNAMIC CLIPPING FOR ANIMATION ---
             // Current max visible length based on uFireScale (0 to 1)
@@ -463,7 +465,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             pos[i*3+2] = 0; 
             vel[i*3] = (Math.random()-0.5);
             vel[i*3+1] = (Math.random()-0.5);
-            vel[i*3+2] = 0.8 + Math.random() * 0.6; // Forward push variance
+            vel[i*3+2] = 1.6 + Math.random() * 0.8; // Stronger forward push
             const c = colorPalette[Math.floor(Math.random() * colorPalette.length)];
             col[i*3] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b;
             off[i] = Math.random() * 10.0;
@@ -489,6 +491,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             case 'IDLE':
                 breathStatus.current.isFiring = false;
                 breathStatus.current.isMouthOpen = false;
+                breathStatus.current.isRoaring = false;
                 progress.current = 0;
                 fadeRef.current = 0;
                 firePlanRef.current = false;
@@ -503,12 +506,14 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 // Open jaw BEFORE firing
                 breathStatus.current.isMouthOpen = true; 
                 breathStatus.current.isFiring = false; 
+                breathStatus.current.isRoaring = !firePlanRef.current;
                 timerRef.current += delta;
                 if (timerRef.current > 0.4) { // Wait 0.4s
                     if (firePlanRef.current) {
                         setState('FIRING');
                         progress.current = 0.0; // CRITICAL RESET: Start animation from 0
                         fadeRef.current = 1;
+                        breathStatus.current.isRoaring = false;
                     } else {
                         setState('ROAR');
                         timerRef.current = 0;
@@ -519,6 +524,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             case 'ROAR':
                 breathStatus.current.isMouthOpen = true;
                 breathStatus.current.isFiring = false;
+                breathStatus.current.isRoaring = true;
                 timerRef.current += delta;
                 if (timerRef.current > 0.6) {
                     setState('IDLE');
@@ -529,6 +535,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             case 'FIRING':
                 breathStatus.current.isFiring = true;
                 breathStatus.current.isMouthOpen = true;
+                breathStatus.current.isRoaring = false;
                 // Animate progress 0 -> 1 (Shooting out)
                 progress.current += delta * 1.2; 
                 if (progress.current >= 1.0) {
@@ -541,6 +548,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             case 'FADING':
                 breathStatus.current.isFiring = true;
                 breathStatus.current.isMouthOpen = true;
+                breathStatus.current.isRoaring = false;
                 // Keep full length, only fade away
                 progress.current = 1.0;
                 timerRef.current += delta;
@@ -548,6 +556,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 if (fadeRef.current <= 0.01) {
                     breathStatus.current.isFiring = false;
                     breathStatus.current.isMouthOpen = false;
+                    breathStatus.current.isRoaring = false;
                     setState('IDLE');
                     nextTriggerTime.current = time + 1.0 + Math.random() * 2.0; // Random delay
                 }
@@ -708,7 +717,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const [position] = useState(new Vector3(0, 0, 10)); 
 
   // --- Breath Status Ref (Shared between Player and DinoBreath) ---
-    const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0 });
+  const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0, isRoaring: false });
 
   // --- [可修改] 恐龍移動速度 (Speed) ---
   const speed = 2.0;
@@ -775,17 +784,31 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     groupRef.current.rotation.x = MathUtils.lerp(groupRef.current.rotation.x, targetTilt, 0.1);
     groupRef.current.rotation.z = MathUtils.lerp(groupRef.current.rotation.z, moveTurn * -0.1, 0.1);
 
+    const MOUTH_OPEN_SPEED = 0.5;   // 提升這裡可以讓張嘴更快
+    const MOUTH_CLOSE_SPEED = 0.35; // 提升這裡可以讓閉嘴更快
+    const JAW_FIRE_OPEN = 0.9;
+    const JAW_ROAR_OPEN = 0.55;
+    const UPPER_FIRE_OPEN = -0.35;
+    const UPPER_ROAR_OPEN = -0.18;
+
     // --- JAW LOGIC (SYNCED) ---
-    const mouthWideOpen = breathStatus.current.isMouthOpen || breathStatus.current.isFiring;
+    const mouthFireOpen = breathStatus.current.isFiring;
+    const mouthRoarOpen = !breathStatus.current.isFiring && breathStatus.current.isMouthOpen;
     const defaultJawRot = isMoving ? 0.4 + Math.sin(time * 8) * 0.15 : 0.2 + Math.sin(time * 2) * 0.05;
-    const lowerTarget = mouthWideOpen ? 0.9 : defaultJawRot;
+    let lowerTarget = defaultJawRot;
+    if (mouthFireOpen) lowerTarget = JAW_FIRE_OPEN;
+    else if (mouthRoarOpen) lowerTarget = JAW_ROAR_OPEN;
     if (jawRef.current) {
-        jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, lowerTarget, mouthWideOpen ? 0.2 : 0.1);
+        const speedFactor = lowerTarget > jawRef.current.rotation.x ? MOUTH_OPEN_SPEED : MOUTH_CLOSE_SPEED;
+        jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, lowerTarget, speedFactor);
         breathStatus.current.mouthAngle = jawRef.current.rotation.x;
     }
     if (upperJawRef.current) {
-        const upperTarget = mouthWideOpen ? -0.35 : 0.05;
-        upperJawRef.current.rotation.x = MathUtils.lerp(upperJawRef.current.rotation.x, upperTarget, mouthWideOpen ? 0.2 : 0.1);
+        let upperTarget = 0.05;
+        if (mouthFireOpen) upperTarget = UPPER_FIRE_OPEN;
+        else if (mouthRoarOpen) upperTarget = UPPER_ROAR_OPEN;
+        const speedFactorTop = upperTarget < upperJawRef.current.rotation.x ? MOUTH_OPEN_SPEED : MOUTH_CLOSE_SPEED;
+        upperJawRef.current.rotation.x = MathUtils.lerp(upperJawRef.current.rotation.x, upperTarget, speedFactorTop);
     }
 
     if (leftLegRef.current && rightLegRef.current) {
