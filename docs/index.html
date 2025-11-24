@@ -437,7 +437,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
     
     // Timer refs
     const progress = useRef(0);
-    const nextTriggerTime = useRef(2.0);
+    const nextTriggerTime = useRef(1.0 + Math.random() * 1.5);
     const timerRef = useRef(0);
 
     // Particle Gen
@@ -492,7 +492,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 // Open jaw BEFORE firing
                 breathStatus.current.isFiring = true; 
                 timerRef.current += delta;
-                if (timerRef.current > 0.4) { // Wait 0.4s
+                if (timerRef.current > 0.2) { // Faster pre-fire windup
                     setState('FIRING');
                     progress.current = 0.0; // CRITICAL RESET: Start animation from 0
                 }
@@ -501,7 +501,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             case 'FIRING':
                 breathStatus.current.isFiring = true;
                 // Animate progress 0 -> 1 (Shooting out)
-                progress.current += delta * 1.2; 
+                progress.current += delta * 2.2; 
                 if (progress.current >= 1.0) {
                     progress.current = 1.0;
                     setState('COOLDOWN');
@@ -511,12 +511,12 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             case 'COOLDOWN':
                 breathStatus.current.isFiring = true;
                 // Animate progress 1 -> 0 (Retracting/Fading)
-                progress.current -= delta * 1.5;
-                if (progress.current <= 0) {
+                progress.current = Math.max(0, progress.current - delta * 8);
+                if (progress.current <= 0.05) {
                     progress.current = 0;
                     breathStatus.current.isFiring = false;
                     setState('IDLE');
-                    nextTriggerTime.current = time + 1.0 + Math.random() * 2.0; // Random delay
+                    nextTriggerTime.current = time + 0.6 + Math.random() * 1.4; // Less predictable cadence
                 }
                 break;
         }
@@ -528,7 +528,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             // Map progress to uFireScale
             mat.uniforms.uFireScale.value = progress.current;
             // Hide mesh if idle
-            meshRef.current.visible = state !== 'IDLE'; 
+            meshRef.current.visible = state === 'FIRING' || state === 'COOLDOWN'; 
         }
     });
 
@@ -739,11 +739,11 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     if (jawRef.current) {
         if (breathStatus.current.isFiring) {
             // Force jaw open wide when firing
-             jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, 0.8, 0.2);
+             jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, 0.95, 0.45);
         } else {
             // Normal breathing / moving
             const targetJawRot = isMoving ? 0.4 + Math.sin(time * 8) * 0.15 : 0.2 + Math.sin(time * 2) * 0.05;
-            jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, targetJawRot, 0.1);
+            jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, targetJawRot, 0.18);
         }
     }
 
@@ -760,11 +760,20 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     }
 
     if (tailBaseRef.current && tailMidRef.current && tailTipRef.current) {
-        const tailSpeed = isMoving ? 12 : 2;
-        const tailAmp = isMoving ? 0.15 : 0.05;
-        tailBaseRef.current.rotation.y = Math.sin(time * tailSpeed) * tailAmp;
-        tailMidRef.current.rotation.y = Math.sin(time * tailSpeed - 0.5) * tailAmp;
-        tailTipRef.current.rotation.y = Math.sin(time * tailSpeed - 1.0) * tailAmp;
+        const tailSpeed = isMoving ? 9 : 3;
+        const tailAmp = isMoving ? 0.22 : 0.08;
+        const baseTargetY = Math.sin(time * tailSpeed) * tailAmp;
+        const midTargetY = Math.sin(time * tailSpeed - 0.6) * tailAmp * 1.1;
+        const tipTargetY = Math.sin(time * tailSpeed - 1.2) * tailAmp * 1.25;
+
+        tailBaseRef.current.rotation.y = MathUtils.lerp(tailBaseRef.current.rotation.y, baseTargetY, 0.08);
+        tailMidRef.current.rotation.y = MathUtils.lerp(tailMidRef.current.rotation.y, midTargetY, 0.12);
+        tailTipRef.current.rotation.y = MathUtils.lerp(tailTipRef.current.rotation.y, tipTargetY, 0.16);
+
+        const midTargetX = Math.cos(time * tailSpeed * 0.6) * tailAmp * 0.4;
+        const tipTargetX = Math.cos(time * tailSpeed * 0.8) * tailAmp * 0.55;
+        tailMidRef.current.rotation.x = MathUtils.lerp(tailMidRef.current.rotation.x, midTargetX, 0.12);
+        tailTipRef.current.rotation.x = MathUtils.lerp(tailTipRef.current.rotation.x, tipTargetX, 0.14);
     }
 
     if (leftArmRef.current && rightArmRef.current) {
