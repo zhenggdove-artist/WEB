@@ -281,6 +281,7 @@ import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 
 // --- [???] ???????? ---
+// --- [???] ???????? ---
 const BREATH_CONFIG = {
     length: 8,          // [???] ???? (????)
     speed: 150.0,       // [???] ?????????
@@ -296,8 +297,11 @@ const FADE_DURATION = 0.25;                // [???] ??????
 const TRIGGER_GAP_BASE = 4.5;              // [???] ????????
 const TRIGGER_GAP_RAND = 1.5;              // [???] ????????
 
+const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React.RefObject<Group> }) => {
+    const meshRef = useRef<THREE.Points>(null);
+    const [state, setState] = useState<'IDLE' | 'WINDUP' | 'FIRING' | 'FADE'>('IDLE');
 
-const phaseTimer = useRef(0);
+    const phaseTimer = useRef(0);
     const nextTriggerTime = useRef(TRIGGER_GAP_BASE + Math.random() * TRIGGER_GAP_RAND);
     const fireScaleRef = useRef(0);
     const alphaRef = useRef(0);
@@ -310,13 +314,13 @@ const phaseTimer = useRef(0);
         const col = new Float32Array(particleCount * 3);
         const off = new Float32Array(particleCount);
         const colorPalette = [
-            new THREE.Color("#00CACA"), 
-            new THREE.Color("#F00078")
+            new THREE.Color('#00CACA'),
+            new THREE.Color('#F00078')
         ];
-        for(let i=0; i<particleCount; i++) {
+        for (let i = 0; i < particleCount; i++) {
             pos[i*3] = (Math.random()-0.5) * 0.1;
             pos[i*3+1] = (Math.random()-0.5) * 0.1;
-            pos[i*3+2] = 0; 
+            pos[i*3+2] = 0;
             vel[i*3] = (Math.random()-0.5);
             vel[i*3+1] = (Math.random()-0.5);
             vel[i*3+2] = 0;
@@ -335,14 +339,13 @@ const phaseTimer = useRef(0);
         uSpeed: { value: BREATH_CONFIG.speed },
         uSpread: { value: BREATH_CONFIG.spread },
         uGlobalAlpha: { value: 1 },
-        uColorNear: { value: new THREE.Color("#00CACA") }, // 靠近嘴巴的顏色
-        uColorFar: { value: new THREE.Color("#F00078") }   // 火焰尾端的顏色
+        uColorNear: { value: new THREE.Color('#00CACA') },
+        uColorFar: { value: new THREE.Color('#F00078') }
     }), []);
 
     useFrame((rState, delta) => {
         const time = rState.clock.getElapsedTime();
-        
-        // --- ANIMATION STATE MACHINE ---
+
         switch (state) {
             case 'IDLE':
                 breathStatus.current.isFiring = false;
@@ -375,13 +378,13 @@ const phaseTimer = useRef(0);
                 if (phaseTimer.current >= FIRE_DURATION) {
                     setState('FADE');
                     phaseTimer.current = 0;
-                    breathStatus.current.isFiring = false; // 讓下個階段開始閉嘴
+                    breathStatus.current.isFiring = false;
                 }
                 break;
 
             case 'FADE':
                 phaseTimer.current += delta;
-                fireScaleRef.current = 1; // 保持長度不收縮，僅透明度下降
+                fireScaleRef.current = 1;
                 alphaRef.current = Math.max(0, 1 - phaseTimer.current / FADE_DURATION);
                 if (alphaRef.current <= 0.01) {
                     alphaRef.current = 0;
@@ -391,7 +394,6 @@ const phaseTimer = useRef(0);
                 break;
         }
 
-        // Update Shader
         if (meshRef.current) {
             const mat = meshRef.current.material as THREE.ShaderMaterial;
             mat.uniforms.uTime.value += delta;
@@ -400,9 +402,9 @@ const phaseTimer = useRef(0);
             mat.uniforms.uLength.value = BREATH_CONFIG.length;
             mat.uniforms.uSpeed.value = BREATH_CONFIG.speed;
             mat.uniforms.uSpread.value = BREATH_CONFIG.spread;
-            meshRef.current.visible = alphaRef.current > 0.01 && state !== 'IDLE'; 
+            meshRef.current.visible = alphaRef.current > 0.01 && state !== 'IDLE';
             const jawAngle = jawRef?.current ? jawRef.current.rotation.x : 0;
-            meshRef.current.rotation.x = -jawAngle + 0.05; // 平射微微上揚
+            meshRef.current.rotation.x = -jawAngle + 0.05; // ??????
         }
     });
 
