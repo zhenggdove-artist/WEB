@@ -304,8 +304,13 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const { camera, controls } = useThree();
   
   const [position] = useState(new Vector3(0, 0, 10)); 
-  const speed = 0.5;
-  const rotationSpeed = 0.05;
+
+  // --- [可修改] 恐龍移動速度 (數值越大跑越快) ---
+  const speed = 2;
+
+  // --- [可修改] 恐龍旋轉速度 (數值越大轉身越快) ---
+  const rotationSpeed = 0.1;
+
   const prevPosition = useRef(position.clone());
 
   // --- [可修改] 觸發連結的位置 (Target Positions) ---
