@@ -283,167 +283,26 @@ import * as THREE from 'three';
 // --- [???] ???????? ---
 const BREATH_CONFIG = {
     length: 8,          // [???] ???? (????)
-    speed: 50.0,        // [???] ?????????
+    speed: 150.0,       // [???] ?????????
     spread: 2,          // [???] ??????
     particleSize: 0.1,  // [???] ??????
     offset: { x: 0, y: 0.8, z: 1.2 } // [???] ???????????
 };
 
+// --- [???] ??????
+    const WINDUP_DURATION = 0.2;               // [???] ???????
+    const FIRE_DURATION = 0.5;                 // [???] ??????
+    const FADE_DURATION = 0.25;                // [???] ??????
+    const TRIGGER_GAP_BASE = 4.5;              // [???] ????????
+    const TRIGGER_GAP_RAND = 1.5;              // [???] ????????
 
 
-// --- HELPER COMPONENTS (Topological Order for Reference) ---
-
-const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
-  return pos.distanceTo(target) < range;
-};
-
-const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity = 1 }: any) => {
-    return (
-        <points position={position} rotation={rotation} scale={scale}>
-            <primitive object={geometry} attach="geometry" />
-            <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={opacity} />
-        </points>
-    )
-}
-
-const TeethRow = ({ count, radius, color, inverted }: any) => {
-    const teeth = [];
-    const dir = inverted ? -1 : 1;
-    for(let i=0; i<count; i++) {
-        const t = (i / (count - 1)); 
-        const angle = (t - 0.5) * 1.5; 
-        const x = Math.sin(angle) * radius * 1.2;
-        const z = Math.cos(angle) * radius; 
-        teeth.push(
-            <PointsShape 
-                key={i} 
-                geometry={new ConeGeometry(0.05, 0.18, 5)} 
-                position={[x, dir * 0.1, z]} 
-                rotation={[dir * Math.PI, 0, 0]} 
-                color={color} 
-                size={0.04} 
-            />
-        )
-    }
-    return <group>{teeth}</group>;
-}
-
-const ThreeToedClaw = ({ position, rotation, scale = 1, color }: any) => {
-    return (
-        <group position={position} rotation={rotation} scale={[scale, scale, scale]}>
-            <PointsShape geometry={new SphereGeometry(0.4, 8, 8)} scale={[1, 0.5, 1]} color={color} size={0.04} />
-            <PointsShape geometry={new ConeGeometry(0.08, 0.6, 6)} position={[0, 0, 0.5]} rotation={[1.6, 0, 0]} color={color} size={0.03} />
-            <PointsShape geometry={new ConeGeometry(0.08, 0.5, 6)} position={[-0.25, 0, 0.4]} rotation={[1.6, 0, 0.3]} color={color} size={0.03} />
-            <PointsShape geometry={new ConeGeometry(0.08, 0.5, 6)} position={[0.25, 0, 0.4]} rotation={[1.6, 0, -0.3]} color={color} size={0.03} />
-        </group>
-    )
-}
-
-const BlinkingEyes = ({ position }: { position: [number, number, number] }) => {
-    const leftEye = useRef<Group>(null);
-    const rightEye = useRef<Group>(null);
-    useFrame((state) => {
-        const t = state.clock.getElapsedTime();
-        const blink = Math.sin(t * 1.5) > 0.95 ? 0.1 : 1; 
-        if(leftEye.current) leftEye.current.scale.y = blink;
-        if(rightEye.current) rightEye.current.scale.y = blink;
-    });
-    return (
-        <group position={position}>
-            <group position={[0.6, 0.5, 0.4]} ref={leftEye}>
-                <PointsShape geometry={new SphereGeometry(0.15, 8, 8)} color="#ffff00" size={0.08} />
-            </group>
-            <group position={[-0.6, 0.5, 0.4]} ref={rightEye}>
-                <PointsShape geometry={new SphereGeometry(0.15, 8, 8)} color="#ffff00" size={0.08} />
-            </group>
-        </group>
-    )
-}
-
-// --- [???] ???????? ---
-
-const BreathMaterial = {
-    uniforms: {
-        uTime: { value: 0 },
-        uFireScale: { value: 0.0 }, // 0.0 to 1.0 (Controls length flow)
-        uLength: { value: BREATH_CONFIG.length },
-        uSpeed: { value: BREATH_CONFIG.speed },
-        uSpread: { value: BREATH_CONFIG.spread },
-        uGlobalAlpha: { value: 1.0 }
-    },
-    vertexShader: `
-        uniform float uTime;
-        uniform float uFireScale;
-        uniform float uLength;
-        uniform float uSpeed;
-        uniform float uSpread;
-        attribute vec3 aVelocity;
-        attribute vec3 aColor;
-        attribute float aOffset;
-        varying vec3 vColor;
-        varying float vAlpha;
-
-        void main() {
-            vColor = aColor;
-            
-            // Age creates the forward movement loop
-            float age = mod(uTime * uSpeed + aOffset, uLength);
-            
-            vec3 pos = position;
-            // Move particles forward
-            pos.z += age; 
-            
-            // --- DYNAMIC CLIPPING FOR ANIMATION ---
-            // Current max visible length based on uFireScale (0 to 1)
-            float currentMaxLength = uLength * uFireScale;
-            float scale = 1.0;
-            
-            // If particle is further than current anim length, hide it
-            if (pos.z > currentMaxLength) {
-                scale = 0.0;
-            }
-            // If scale is effectively 0, hide everything
-            if (uFireScale < 0.01) {
-                scale = 0.0;
-            }
-
-            // Spread outward as Z increases
-            float spreadFactor = (pos.z / uLength) * uSpread;
-            pos.x += aVelocity.x * spreadFactor;
-            pos.y += aVelocity.y * spreadFactor;
-
-            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-            gl_Position = projectionMatrix * mvPosition;
-            
-            gl_PointSize = scale * (1.0 - pos.z/uLength) * 500.0 / -mvPosition.z;
-
-            // Fade out at end of max length
-            vAlpha = scale * (1.0 - smoothstep(uLength * 0.8, uLength, pos.z));
-        }
-    `,
-    fragmentShader: `
-        uniform float uGlobalAlpha;
-        varying vec3 vColor;
-        varying float vAlpha;
-        void main() {
-            if(vAlpha < 0.01) discard;
-            vec2 coord = gl_PointCoord - vec2(0.5);
-            if(length(coord) > 0.5) discard;
-            gl_FragColor = vec4(vColor, vAlpha * uGlobalAlpha);
-        }
-    `
-};
-
-const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React.RefObject<Group> }) => {
-    const meshRef = useRef<THREE.Points>(null);
-    const [state, setState] = useState<'IDLE' | 'WINDUP' | 'FIRING' | 'FADE'>('IDLE');
-    
-    // [可修改] 噴火節奏設定
-    const WINDUP_DURATION = 0.1;               // 噴火前張嘴時間
-    const FIRE_DURATION = 0.001;                // 持續噴射時間
-    const FADE_DURATION = 0.001;               // 火焰消散時間
-    const TRIGGER_GAP_BASE = 4.5;             // 噴火間隔基準秒數
-    const TRIGGER_GAP_RAND = 1.5;             // 噴火間隔隨機加成
+// [???] ??????
+    const WINDUP_DURATION = 0.2;               // [???] ???????
+    const FIRE_DURATION = 0.5;                 // [???] ??????
+    const FADE_DURATION = 0.25;                // [???] ??????
+    const TRIGGER_GAP_BASE = 4.5;              // [???] ????????
+    const TRIGGER_GAP_RAND = 1.5;              // [???] ????????              // [???] ????????              // [???] ????????             // [???] ????????             // 噴火間隔隨機加成
 
     const phaseTimer = useRef(0);
     const nextTriggerTime = useRef(TRIGGER_GAP_BASE + Math.random() * TRIGGER_GAP_RAND);
@@ -458,9 +317,8 @@ const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React
         const col = new Float32Array(particleCount * 3);
         const off = new Float32Array(particleCount);
         const colorPalette = [
-            new THREE.Color("#ff0000"), 
-            new THREE.Color("#ff6600"), 
-            new THREE.Color("#ffcc00") 
+            new THREE.Color("#00CACA"), 
+            new THREE.Color("#F00078")
         ];
         for(let i=0; i<particleCount; i++) {
             pos[i*3] = (Math.random()-0.5) * 0.1;
@@ -483,7 +341,9 @@ const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React
         uLength: { value: BREATH_CONFIG.length },
         uSpeed: { value: BREATH_CONFIG.speed },
         uSpread: { value: BREATH_CONFIG.spread },
-        uGlobalAlpha: { value: 1 }
+        uGlobalAlpha: { value: 1 },
+        uColorNear: { value: new THREE.Color("#00CACA") }, // 靠近嘴巴的顏色
+        uColorFar: { value: new THREE.Color("#F00078") }   // 火焰尾端的顏色
     }), []);
 
     useFrame((rState, delta) => {
