@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Group, MathUtils, BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry } from 'three';
-import { useInput } from '../hooks/useInput';
-import { joystickState } from './UIOverlay';
+import { useInput } from '../hooks/useInput.ts';
+import { joystickState } from './UIOverlay.tsx';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 interface PlayerProps {

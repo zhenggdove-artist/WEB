@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 
 interface UIOverlayProps {
   isFading: boolean;
@@ -59,26 +59,19 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
   return (
     <>
       {/* Fade Overlay */}
-      <div
-        className={`absolute inset-0 pointer-events-none bg-black z-50 transition-opacity duration-[2000ms] ease-in-out ${
-          isFading ? 'opacity-100' : 'opacity-0'
-        }`}
-      />
+      <div className={`overlay-fade ${isFading ? 'active' : ''}`} />
       
       {/* Virtual Joystick (Mobile Only) */}
       <div 
-        className="absolute bottom-12 right-1/2 translate-x-1/2 md:hidden z-40 no-select"
+        className="joystick-wrapper"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div 
-          ref={baseRef}
-          className="w-32 h-32 rounded-full border-2 border-white/10 bg-black/20 backdrop-blur-md flex items-center justify-center"
-        >
+        <div ref={baseRef} className="joystick-base">
           <div 
             ref={stickRef}
-            className="w-12 h-12 rounded-full bg-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.8)] border border-cyan-200"
+            className="joystick-stick"
             style={{
               transform: `translate(${pos.x}px, ${pos.y}px)`,
               transition: touching ? 'none' : 'transform 0.2s ease-out'

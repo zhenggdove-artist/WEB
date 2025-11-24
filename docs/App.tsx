@@ -1,8 +1,8 @@
 import React, { useState, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stars, Loader } from '@react-three/drei';
-import Scene from './components/Scene';
-import UIOverlay from './components/UIOverlay';
+import Scene from './components/Scene.tsx';
+import UIOverlay from './components/UIOverlay.tsx';
 
 export default function App() {
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
@@ -21,10 +21,10 @@ export default function App() {
   };
 
   return (
-    <div className="relative w-full h-full bg-black">
+    <div className="app-container">
       {/* Increased Z position from 14 to 30 for further initial distance */}
       <Canvas
-        camera={{ position: [0, 15, 50], fov: 50 }}
+        camera={{ position: [0, 15, 30], fov: 50 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: false }}
       >

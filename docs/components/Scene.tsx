@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Environment as DreiEnv, Text3D, Center, MeshDistortMaterial } from '@react-three/drei';
-import Player from './Player';
-import WorldEnvironment from './WorldEnvironment';
+import Player from './Player.tsx';
+import WorldEnvironment from './WorldEnvironment.tsx';
 import * as THREE from 'three';
 
 // --- LABEL CONFIGURATION (EDIT HERE) ---
