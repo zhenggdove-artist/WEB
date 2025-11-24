@@ -928,7 +928,7 @@ const GenericPointShader = {
 
 // --- GLOBAL CONFIGURATION (EDIT HERE) ---
 export const PLANET_CONFIG = {
-  position: { x: 250, y: -550, z: 0 },    
+  position: { x: 250, y: -250, z: 0 },    
   radius: 200,                            
   planetColor: "#ffe733",                 
   planetOuterPointCount: 10000,           
@@ -945,14 +945,14 @@ export const PLANET_CONFIG = {
   leftPlanetColor: "#00ccff",
   leftPlanetNebulaColor: "#00ffff",
   leftPlanetPointCount: 40000,
-  tentacleCount: 0,           // CHANGED TO 150 to be visible
+  tentacleCount: 500,           // CHANGED TO 150 to be visible
   tentacleRootColor: "#4D0000", 
-  tentacleTipColor1: "#ffe733", 
-  tentacleTipColor2: "#ff5500", 
+  tentacleTipColor1: "#4D0000", 
+  tentacleTipColor2: "#4D0000", 
   tentacleRadiusMin: 4,         // CHANGED TO 4-12
-  tentacleRadiusMax: 12,        
-  tentacleBaseLength: 80,       
-  tentacleLengthJitter: 40      
+  tentacleRadiusMax: 2,        
+  tentacleBaseLength: 5,       
+  tentacleLengthJitter: 20      
 };
 
 // --- CRITICAL FIX: Ensure pointsPerRing is 30 (not 0) ---
