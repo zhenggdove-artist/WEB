@@ -367,7 +367,8 @@ const BreathMaterial = {
         uFireScale: { value: 0.0 }, // 0.0 to 1.0 (Controls length flow)
         uLength: { value: 5 },
         uSpeed: { value: 5 },
-        uSpread: { value: 1 }
+        uSpread: { value: 1 },
+        uFade: { value: 0 }
     },
     vertexShader: `
         uniform float uTime;
@@ -422,23 +423,27 @@ const BreathMaterial = {
     fragmentShader: `
         varying vec3 vColor;
         varying float vAlpha;
+        uniform float uFade;
         void main() {
             if(vAlpha < 0.01) discard;
             vec2 coord = gl_PointCoord - vec2(0.5);
             if(length(coord) > 0.5) discard;
-            gl_FragColor = vec4(vColor, vAlpha);
+            gl_FragColor = vec4(vColor, vAlpha * uFade);
         }
     `
 };
 
 const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
     const meshRef = useRef<THREE.Points>(null);
-    const [state, setState] = useState<'IDLE' | 'PRE_FIRE' | 'FIRING' | 'COOLDOWN'>('IDLE');
+    const [state, setState] = useState<'IDLE' | 'PRE_FIRE' | 'ROAR' | 'FIRING' | 'FADING'>('IDLE');
     
     // Timer refs
     const progress = useRef(0);
     const nextTriggerTime = useRef(2.0);
     const timerRef = useRef(0);
+    const fadeRef = useRef(0);
+    const firePlanRef = useRef(false);
+    const FIRE_PROBABILITY = 0.6;
 
     // Particle Gen
     const particleCount = 1500;
@@ -472,7 +477,8 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
         uFireScale: { value: 0 },
         uLength: { value: BREATH_CONFIG.length },
         uSpeed: { value: BREATH_CONFIG.speed },
-        uSpread: { value: BREATH_CONFIG.spread }
+        uSpread: { value: BREATH_CONFIG.spread },
+        uFade: { value: 0 }
     }), []);
 
     useFrame((rState, delta) => {
@@ -482,7 +488,12 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
         switch (state) {
             case 'IDLE':
                 breathStatus.current.isFiring = false;
+                breathStatus.current.isMouthOpen = false;
+                progress.current = 0;
+                fadeRef.current = 0;
+                firePlanRef.current = false;
                 if (time > nextTriggerTime.current) {
+                    firePlanRef.current = Math.random() < FIRE_PROBABILITY;
                     setState('PRE_FIRE');
                     timerRef.current = 0; // Reset local timer
                 }
@@ -490,31 +501,53 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
 
             case 'PRE_FIRE':
                 // Open jaw BEFORE firing
-                breathStatus.current.isFiring = true; 
+                breathStatus.current.isMouthOpen = true; 
+                breathStatus.current.isFiring = false; 
                 timerRef.current += delta;
                 if (timerRef.current > 0.4) { // Wait 0.4s
-                    setState('FIRING');
-                    progress.current = 0.0; // CRITICAL RESET: Start animation from 0
+                    if (firePlanRef.current) {
+                        setState('FIRING');
+                        progress.current = 0.0; // CRITICAL RESET: Start animation from 0
+                        fadeRef.current = 1;
+                    } else {
+                        setState('ROAR');
+                        timerRef.current = 0;
+                    }
+                }
+                break;
+
+            case 'ROAR':
+                breathStatus.current.isMouthOpen = true;
+                breathStatus.current.isFiring = false;
+                timerRef.current += delta;
+                if (timerRef.current > 0.6) {
+                    setState('IDLE');
+                    nextTriggerTime.current = time + 1.0 + Math.random() * 2.0; // Random delay
                 }
                 break;
 
             case 'FIRING':
                 breathStatus.current.isFiring = true;
+                breathStatus.current.isMouthOpen = true;
                 // Animate progress 0 -> 1 (Shooting out)
                 progress.current += delta * 1.2; 
                 if (progress.current >= 1.0) {
                     progress.current = 1.0;
-                    setState('COOLDOWN');
+                    timerRef.current = 0;
+                    setState('FADING');
                 }
                 break;
 
-            case 'COOLDOWN':
+            case 'FADING':
                 breathStatus.current.isFiring = true;
-                // Animate progress 1 -> 0 (Retracting/Fading)
-                progress.current -= delta * 1.5;
-                if (progress.current <= 0) {
-                    progress.current = 0;
+                breathStatus.current.isMouthOpen = true;
+                // Keep full length, only fade away
+                progress.current = 1.0;
+                timerRef.current += delta;
+                fadeRef.current = Math.max(0, 1 - timerRef.current * 1.5);
+                if (fadeRef.current <= 0.01) {
                     breathStatus.current.isFiring = false;
+                    breathStatus.current.isMouthOpen = false;
                     setState('IDLE');
                     nextTriggerTime.current = time + 1.0 + Math.random() * 2.0; // Random delay
                 }
@@ -526,14 +559,16 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             const mat = meshRef.current.material as THREE.ShaderMaterial;
             mat.uniforms.uTime.value += delta;
             // Map progress to uFireScale
-            mat.uniforms.uFireScale.value = progress.current;
-            // Hide mesh if idle
-            meshRef.current.visible = state !== 'IDLE'; 
+            const currentScale = state === 'FADING' ? 1 : progress.current;
+            mat.uniforms.uFireScale.value = currentScale;
+            mat.uniforms.uFade.value = fadeRef.current;
+            // Hide mesh if idle or faded
+            meshRef.current.visible = (state === 'FIRING' || state === 'FADING') && fadeRef.current > 0.01; 
         }
     });
 
     return (
-        <points ref={meshRef} position={[BREATH_CONFIG.offset.x, BREATH_CONFIG.offset.y, BREATH_CONFIG.offset.z]} rotation={[-0.2, 0, 0]}>
+        <points ref={meshRef} position={[BREATH_CONFIG.offset.x, BREATH_CONFIG.offset.y, BREATH_CONFIG.offset.z]} rotation={[0, 0, 0]}>
             <bufferGeometry>
                 <bufferAttribute attach="attributes-position" count={particleCount} array={positions} itemSize={3} />
                 <bufferAttribute attach="attributes-aVelocity" count={particleCount} array={velocities} itemSize={3} />
@@ -553,7 +588,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
 };
 
 const TRexModel: React.FC<any> = ({ 
-    leftLegRef, rightLegRef, leftArmRef, rightArmRef, jawRef,
+    leftLegRef, rightLegRef, leftArmRef, rightArmRef, jawRef, upperJawRef,
     tailBaseRef, tailMidRef, tailTipRef, breathStatus 
 }) => {
   const skinColor = "#00ff66"; 
@@ -574,18 +609,19 @@ const TRexModel: React.FC<any> = ({
     <group rotation={[0, Math.PI, 0]} scale={[0.8, 0.8, 0.8]}>
       <group>
           <group position={[0, 4.2, 2.2]}>
-            <PointsShape geometry={new BoxGeometry(1.5, 1.4, 1.5, 12, 12, 12)} position={[0, 0.2, 0]} color={skinColor} {...materialProps} />
-            <PointsShape geometry={new CylinderGeometry(0.5, 0.75, 1.6, 12, 8)} position={[0, 0.1, 1.5]} rotation={[1.57, 0, 0]} color={skinColor} {...materialProps} />
-            <PointsShape geometry={new BoxGeometry(0.8, 0.2, 1.4, 8, 2, 8)} position={[0, -0.4, 1.2]} color={gumColor} size={0.04} />
-            <group position={[0, -0.4, 1.2]}>
-                <TeethRow count={8} radius={0.45} color={teethColor} inverted={false} />
+            <group ref={upperJawRef}>
+                <PointsShape geometry={new BoxGeometry(1.5, 1.4, 1.5, 12, 12, 12)} position={[0, 0.2, 0]} color={skinColor} {...materialProps} />
+                <PointsShape geometry={new CylinderGeometry(0.5, 0.75, 1.6, 12, 8)} position={[0, 0.1, 1.5]} rotation={[1.57, 0, 0]} color={skinColor} {...materialProps} />
+                <PointsShape geometry={new BoxGeometry(0.8, 0.2, 1.4, 8, 2, 8)} position={[0, -0.4, 1.2]} color={gumColor} size={0.04} />
+                <group position={[0, -0.4, 1.2]}>
+                    <TeethRow count={8} radius={0.45} color={teethColor} inverted={false} />
+                </group>
+                
+                <BlinkingEyes position={[0, 0, 0]} />
+
+                <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[0.6, 0.65, 0.4]} rotation={[0, 0, 0.2]} color="#004400" size={0.04} /> 
+                <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[-0.6, 0.65, 0.4]} rotation={[0, 0, -0.2]} color="#004400" size={0.04} />
             </group>
-            
-            <BlinkingEyes position={[0, 0, 0]} />
-
-            <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[0.6, 0.65, 0.4]} rotation={[0, 0, 0.2]} color="#004400" size={0.04} /> 
-            <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[-0.6, 0.65, 0.4]} rotation={[0, 0, -0.2]} color="#004400" size={0.04} />
-
             <group position={[0, -0.4, 0.2]} rotation={[0.2, 0, 0]} ref={jawRef}>
                 <PointsShape geometry={new CylinderGeometry(0.4, 0.6, 1.6, 12, 8)} position={[0, 0, 1.0]} rotation={[1.57, 0, 0]} color={detailColor} {...materialProps} />
                 <PointsShape geometry={new BoxGeometry(0.7, 0.1, 1.3, 8, 2, 8)} position={[0, 0.2, 1.0]} color={gumColor} size={0.04} />
@@ -659,6 +695,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const leftArmRef = useRef<Group>(null);
   const rightArmRef = useRef<Group>(null);
   const jawRef = useRef<Group>(null); 
+  const upperJawRef = useRef<Group>(null);
   const tailBaseRef = useRef<Group>(null);
   const tailMidRef = useRef<Group>(null);
   const tailTipRef = useRef<Group>(null);
@@ -668,7 +705,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const [position] = useState(new Vector3(0, 0, 10)); 
 
   // --- Breath Status Ref (Shared between Player and DinoBreath) ---
-  const breathStatus = useRef({ isFiring: false });
+  const breathStatus = useRef({ isFiring: false, isMouthOpen: false });
 
   // --- [可修改] 恐龍移動速度 (Speed) ---
   const speed = 2.0;
@@ -736,15 +773,15 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     groupRef.current.rotation.z = MathUtils.lerp(groupRef.current.rotation.z, moveTurn * -0.1, 0.1);
 
     // --- JAW LOGIC (SYNCED) ---
+    const mouthWideOpen = breathStatus.current.isMouthOpen || breathStatus.current.isFiring;
+    const defaultJawRot = isMoving ? 0.4 + Math.sin(time * 8) * 0.15 : 0.2 + Math.sin(time * 2) * 0.05;
+    const lowerTarget = mouthWideOpen ? 0.9 : defaultJawRot;
     if (jawRef.current) {
-        if (breathStatus.current.isFiring) {
-            // Force jaw open wide when firing
-             jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, 0.8, 0.2);
-        } else {
-            // Normal breathing / moving
-            const targetJawRot = isMoving ? 0.4 + Math.sin(time * 8) * 0.15 : 0.2 + Math.sin(time * 2) * 0.05;
-            jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, targetJawRot, 0.1);
-        }
+        jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, lowerTarget, mouthWideOpen ? 0.2 : 0.1);
+    }
+    if (upperJawRef.current) {
+        const upperTarget = mouthWideOpen ? -0.35 : 0.05;
+        upperJawRef.current.rotation.x = MathUtils.lerp(upperJawRef.current.rotation.x, upperTarget, mouthWideOpen ? 0.2 : 0.1);
     }
 
     if (leftLegRef.current && rightLegRef.current) {
@@ -805,6 +842,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
         leftArmRef={leftArmRef}
         rightArmRef={rightArmRef}
         jawRef={jawRef}
+        upperJawRef={upperJawRef}
         tailBaseRef={tailBaseRef}
         tailMidRef={tailMidRef}
         tailTipRef={tailTipRef}
