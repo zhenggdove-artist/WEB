@@ -290,6 +290,17 @@ const BREATH_CONFIG = {
     offset: { x: 0, y: 1, z: 1.2 } // 發射點相對於下顎的位置
 };
 
+// --- BREATH TIMING (調整開嘴時間/噴火頻率) ---
+const BREATH_TIMING = {
+    preFireDelay: 0.25,      // 噴火前張嘴準備時間 (秒)
+    fireGrowSpeed: 2.2,      // 火焰展開速度 (越大越快到最長)
+    fadeSpeed: 3.0,          // 火焰消散速度 (越大越快消失)
+    roarHold: 0.3,           // 只張嘴不噴火時維持開口時間 (秒)
+    idleDelayMin: 0.6,       // 兩次觸發最小間隔 (秒)
+    idleDelayJitter: 1.2,    // 觸發間隔隨機範圍 (秒)
+    fireProbability: 0.6     // 張嘴後觸發噴火的機率
+};
+
 // --- HELPER COMPONENTS (Topological Order for Reference) ---
 
 const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
@@ -441,11 +452,10 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
     
     // Timer refs
     const progress = useRef(0);
-    const nextTriggerTime = useRef(2.0);
+    const nextTriggerTime = useRef(BREATH_TIMING.idleDelayMin + BREATH_TIMING.idleDelayJitter);
     const timerRef = useRef(0);
     const fadeRef = useRef(0);
     const firePlanRef = useRef(false);
-    const FIRE_PROBABILITY = 0.6;
 
     // Particle Gen
     const particleCount = 1500;
@@ -496,7 +506,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 fadeRef.current = 0;
                 firePlanRef.current = false;
                 if (time > nextTriggerTime.current) {
-                    firePlanRef.current = Math.random() < FIRE_PROBABILITY;
+                    firePlanRef.current = Math.random() < BREATH_TIMING.fireProbability;
                     setState('PRE_FIRE');
                     timerRef.current = 0; // Reset local timer
                 }
@@ -508,7 +518,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 breathStatus.current.isFiring = false; 
                 breathStatus.current.isRoaring = !firePlanRef.current;
                 timerRef.current += delta;
-                if (timerRef.current > 0.4) { // Wait 0.4s
+                if (timerRef.current > BREATH_TIMING.preFireDelay) { // Wait preFireDelay seconds
                     if (firePlanRef.current) {
                         setState('FIRING');
                         progress.current = 0.0; // CRITICAL RESET: Start animation from 0
@@ -526,9 +536,9 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 breathStatus.current.isFiring = false;
                 breathStatus.current.isRoaring = true;
                 timerRef.current += delta;
-                if (timerRef.current > 0.6) {
+                if (timerRef.current > BREATH_TIMING.roarHold) {
                     setState('IDLE');
-                    nextTriggerTime.current = time + 1.0 + Math.random() * 2.0; // Random delay
+                    nextTriggerTime.current = time + BREATH_TIMING.idleDelayMin + Math.random() * BREATH_TIMING.idleDelayJitter; // Random delay
                 }
                 break;
 
@@ -537,7 +547,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 breathStatus.current.isMouthOpen = true;
                 breathStatus.current.isRoaring = false;
                 // Animate progress 0 -> 1 (Shooting out)
-                progress.current += delta * 1.2; 
+                progress.current += delta * BREATH_TIMING.fireGrowSpeed; 
                 if (progress.current >= 1.0) {
                     progress.current = 1.0;
                     timerRef.current = 0;
@@ -552,13 +562,13 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 // Keep full length, only fade away
                 progress.current = 1.0;
                 timerRef.current += delta;
-                fadeRef.current = Math.max(0, 1 - timerRef.current * 1.5);
+                fadeRef.current = Math.max(0, 1 - timerRef.current * BREATH_TIMING.fadeSpeed);
                 if (fadeRef.current <= 0.01) {
                     breathStatus.current.isFiring = false;
                     breathStatus.current.isMouthOpen = false;
                     breathStatus.current.isRoaring = false;
                     setState('IDLE');
-                    nextTriggerTime.current = time + 1.0 + Math.random() * 2.0; // Random delay
+                    nextTriggerTime.current = time + BREATH_TIMING.idleDelayMin + Math.random() * BREATH_TIMING.idleDelayJitter; // Random delay
                 }
                 break;
         }
