@@ -284,7 +284,7 @@ import * as THREE from 'three';
 // --- [可修改] 恐龍火焰噴射長度與設定 ---
 const BREATH_CONFIG = {
     length: 3.0,       // 火焰噴射的最大距離 (長度)
-    speed: 50,        // 火焰粒子的飛行速度 (提高以加快水平噴射)
+    speed: 90,        // 火焰粒子的飛行速度 (提高以加快水平噴射)
     spread: 1.1,        // 火焰擴散的寬度 (錐形角度)
     particleSize: 0.3,  // 每個火焰點的大小
     offset: { x: 0, y: 1, z: 1.2 } // 發射點相對於下顎的位置
@@ -293,9 +293,9 @@ const BREATH_CONFIG = {
 // --- BREATH TIMING (調整開嘴時間/噴火頻率) ---
 const BREATH_TIMING = {
     preFireDelay: 0.25,      // 噴火前張嘴準備時間 (秒)
-    fireGrowSpeed: 2.2,      // 火焰展開速度 (越大越快到最長)
+    fireGrowSpeed: 30,      // 火焰展開速度 (越大越快到最長)
     fadeSpeed: 3.0,          // 火焰消散速度 (越大越快消失)
-    roarHold: 0.3,           // 只張嘴不噴火時維持開口時間 (秒)
+    roarHold: 0.1,           // 只張嘴不噴火時維持開口時間 (秒)
     idleDelayMin: 0.6,       // 兩次觸發最小間隔 (秒)
     idleDelayJitter: 1.2,    // 觸發間隔隨機範圍 (秒)
     fireProbability: 0.6     // 張嘴後觸發噴火的機率
