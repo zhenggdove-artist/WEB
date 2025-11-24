@@ -1,0 +1,5 @@
+{
+  "name": "Point Cloud Portal",
+  "description": "A 3D point-cloud exploration interface with keyboard and touch controls.",
+  "requestFramePermissions": []
+}
