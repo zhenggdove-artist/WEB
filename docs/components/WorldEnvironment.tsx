@@ -35,7 +35,7 @@ export const PLANET_CONFIG = {
 };
 
 // --- TENTACLE INTERNAL SETTINGS ---
-const BASE_DENSITY = { pointsPerRing: 90 }; 
+const BASE_DENSITY = { pointsPerRing: 30 }; 
 
 const GenericPointShader = {
     vertexShader: `

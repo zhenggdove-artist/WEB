@@ -14,7 +14,6 @@
     "@react-three/drei": "9.99.0",
     "three": "0.161.0",
     "three-stdlib": "2.29.4",
-    "uuid": "9.0.1",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
