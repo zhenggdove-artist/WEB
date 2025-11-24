@@ -437,7 +437,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
     
     // Timer refs
     const progress = useRef(0);
-    const nextTriggerTime = useRef(1.0 + Math.random() * 1.5);
+    const nextTriggerTime = useRef(4.5 + Math.random() * 1.5); // ~5s cadence
     const timerRef = useRef(0);
 
     // Particle Gen
@@ -516,7 +516,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                     progress.current = 0;
                     breathStatus.current.isFiring = false;
                     setState('IDLE');
-                    nextTriggerTime.current = time + 0.6 + Math.random() * 1.4; // Less predictable cadence
+                    nextTriggerTime.current = time + 4.5 + Math.random() * 1.5; // ~5s before next fire
                 }
                 break;
         }
@@ -533,7 +533,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
     });
 
     return (
-        <points ref={meshRef} position={[BREATH_CONFIG.offset.x, BREATH_CONFIG.offset.y, BREATH_CONFIG.offset.z]} rotation={[-0.2, 0, 0]}>
+        <points ref={meshRef} position={[BREATH_CONFIG.offset.x, BREATH_CONFIG.offset.y, BREATH_CONFIG.offset.z]} rotation={[0, 0, 0]}>
             <bufferGeometry>
                 <bufferAttribute attach="attributes-position" count={particleCount} array={positions} itemSize={3} />
                 <bufferAttribute attach="attributes-aVelocity" count={particleCount} array={velocities} itemSize={3} />
