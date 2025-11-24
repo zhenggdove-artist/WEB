@@ -422,7 +422,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     if (checkTrigger(position, monumentPos, 12)) {
       onTrigger("https://www.zhenggdove.com/bio");
     }
-    // 右側：Projects (已更新)
+    // 右側：Projects
     if (checkTrigger(position, debrisPos, 12)) {
       onTrigger("https://www.zhenggdove.com/projects");
     }
@@ -596,36 +596,43 @@ import { CatmullRomCurve3, Vector3, Color, MathUtils } from 'three';
 export const PLANET_CONFIG = {
   // --- 底部核心星球設定 ---
   position: { x: 250, y: -350, z: 0 },    // 星球位置 [X(左右), Y(上下), Z(前後)]
-  radius: 300,                            // 星球半徑 (大小)
+  radius: 200,                            // 星球半徑 (大小)
   planetColor: "#ffe733",                 // 星球主要顏色 (黃色)
   planetOuterPointCount: 10000,           // 星球表面點的數量 (越多越密)
-  planetInnerPointCount: 300000,          // 星球內部填充點的數量 (解決空心感)
+  planetInnerPointCount: 1000000,          // 星球內部填充點的數量 (解決空心感)
   
   // --- 中央祭壇設定 ---
   altarColor: "#91041c",       // 祭壇主體顏色 (深紅)
   altarConeColor: "#ff0066",   // 祭壇頂部三角錐顏色 (亮粉紅)
 
-  // --- 天空第二星球設定 ---
-  skyPlanetPosition: { x: 200, y: 250, z: -100 }, // 天空星球位置
-  skyPlanetRadius: 200,                           // 天空星球半徑
-  skyPlanetColor: "#91041c",                      // 天空星球顏色
-  skyPlanetOuterCount: 38000,                     // 表面點數
-  skyPlanetInnerCount: 50000,                     // 內部點數
+  // --- 天空第二星球設定 (頂部) ---
+  skyPlanetPosition: { x: 200, y: 250, z: -100 }, 
+  skyPlanetRadius: 200,                           
+  skyPlanetColor: "#91041c",                      
+  skyPlanetOuterCount: 38000,                     
+  skyPlanetInnerCount: 50000,
+
+  // --- 左側星雲星球設定 (新增) ---
+  leftPlanetPosition: { x: 0, y: 20, z: 400 }, // Z為正值代表左側 (基於座標轉換)
+  leftPlanetRadius: 200,
+  leftPlanetColor: "#00ccff",
+  leftPlanetNebulaColor: "#00ccff",
+  leftPlanetPointCount: 40000,
 
   // --- 觸手設定 (Tentacles) ---
-  tentacleCount: 600,          // 觸手數量 (建議 50-200，設為 0 會隱藏)
-  tentacleRootColor: "#ffe733", // 觸手根部顏色 (連接星球處)
-  tentacleTipColor1: "#ffe733", // 觸手末端顏色變體 1
-  tentacleTipColor2: "#ff0066", // 觸手末端顏色變體 2
-  tentacleRadiusMin: 1,         // 觸手最小粗細
-  tentacleRadiusMax: 3,        // 觸手最大粗細
-  tentacleBaseLength: 5,       // 觸手基礎長度 (越大越長)
-  tentacleLengthJitter: 6      // 觸手長度隨機增量 (讓觸手長短不一)
+  tentacleCount: 500,          // 觸手數量 (建議 50-200，設為 0 會隱藏)
+  tentacleRootColor: "#4D0000", // 觸手根部顏色 (連接星球處)
+  tentacleTipColor1: "#4D0000", // 觸手末端顏色變體 1
+  tentacleTipColor2: "#4D0000", // 觸手末端顏色變體 2
+  tentacleRadiusMin: 5,         // 觸手最小粗細
+  tentacleRadiusMax: 20,        // 觸手最大粗細
+  tentacleBaseLength: 2,       // 觸手基礎長度 (越大越長)
+  tentacleLengthJitter: 3      // 觸手長度隨機增量 (讓觸手長短不一)
 };
 
 // --- [內部設定] ---
 // 重要：此數值必須大於 0，否則觸手會隱形 (修正之前的 Bug)
-const BASE_DENSITY = { pointsPerRing: 1 }; 
+const BASE_DENSITY = { pointsPerRing: 30 }; 
 
 const GenericPointShader = {
     vertexShader: `
@@ -747,6 +754,60 @@ const Planet: React.FC<PlanetProps> = ({
   );
 };
 
+// --- NEW NEBULA PLANET ---
+const NebulaPlanet = ({ position, radius, color, nebulaColor, pointCount }: any) => {
+    const nebulaRef = useRef<THREE.Points>(null);
+
+    const nebulaPoints = useMemo(() => {
+        const count = 10000;
+        const pos = new Float32Array(count * 3);
+        const ringRadius = radius * 1.6;
+        const ringWidth = radius * 0.5;
+
+        for(let i=0; i<count; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const r = ringRadius + (Math.random()-0.5) * ringWidth;
+            
+            const x = r * Math.cos(theta);
+            const z = r * Math.sin(theta);
+            const y = (Math.random()-0.5) * (radius * 0.4);
+
+            pos[i*3] = x;
+            pos[i*3+1] = y;
+            pos[i*3+2] = z;
+        }
+        return pos;
+    }, [radius]);
+
+    useFrame((state) => {
+        if(nebulaRef.current) {
+            nebulaRef.current.rotation.y += 0.002;
+            nebulaRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.2) * 0.1;
+        }
+    });
+
+    return (
+        <group position={position}>
+            {/* Core Planet */}
+            <Planet 
+                size={radius} 
+                outerCount={pointCount} 
+                innerCount={pointCount * 2} 
+                color={color} 
+                rotationSpeed={0.03} 
+                noiseAmplitude={0.1}
+            />
+            {/* Nebula Ring */}
+            <points ref={nebulaRef}>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" count={nebulaPoints.length/3} array={nebulaPoints} itemSize={3} />
+                </bufferGeometry>
+                <pointsMaterial size={0.5} color={nebulaColor} sizeAttenuation transparent opacity={0.6} blending={THREE.AdditiveBlending} depthWrite={false} />
+            </points>
+        </group>
+    )
+}
+
 const WorldEnvironment = () => {
   const stairCount = 40;
   const stairWidth = 80; 
@@ -770,14 +831,23 @@ const WorldEnvironment = () => {
     return items;
   }, []);
 
+  // Remap logic for Core Planet
   const { x, y, z } = PLANET_CONFIG.position;
   const corePlanetPos = [-z, y, -x];
 
+  // Remap logic for Sky Planet
   const { x: sx, y: sy, z: sz } = PLANET_CONFIG.skyPlanetPosition;
   const skyPlanetPos = [-sz, sy, -sx];
 
+  // Remap logic for Left Nebula Planet
+  const { x: lx, y: ly, z: lz } = PLANET_CONFIG.leftPlanetPosition;
+  // If Z+ is "Left" in config, and Scene -X is Left. 
+  // Let's assume Config Z maps to Scene -X directly for "Side" movement.
+  const leftPlanetPos = [-lz, ly, -lx];
+
   return (
     <group>
+      {/* --- CORE PLANET (Bottom) --- */}
       <group>
          <group position={corePlanetPos as any}>
             <Planet 
@@ -792,20 +862,32 @@ const WorldEnvironment = () => {
          <BiologicalTentacleSystem />
       </group>
 
+      {/* --- SKY PLANET (Top) --- */}
       <group position={skyPlanetPos as any}>
           <Planet 
               size={PLANET_CONFIG.skyPlanetRadius}
               outerCount={PLANET_CONFIG.skyPlanetOuterCount}
               innerCount={PLANET_CONFIG.skyPlanetInnerCount}
               color={PLANET_CONFIG.skyPlanetColor}
-              rotationSpeed={-0.05} 
+              rotationSpeed={-0.05} // Rotate opposite way
               noiseAmplitude={0.08}
           />
           <pointLight distance={200} intensity={2} color={PLANET_CONFIG.skyPlanetColor} />
       </group>
 
+      {/* --- LEFT NEBULA PLANET (New) --- */}
+      <NebulaPlanet 
+        position={leftPlanetPos}
+        radius={PLANET_CONFIG.leftPlanetRadius}
+        color={PLANET_CONFIG.leftPlanetColor}
+        nebulaColor={PLANET_CONFIG.leftPlanetNebulaColor}
+        pointCount={PLANET_CONFIG.leftPlanetPointCount}
+      />
+
+      {/* --- STAIRS --- */}
       <group>{stairs}</group>
 
+      {/* --- TOP PLATFORM --- */}
       <group position={[0, 7.8, -75]}>
          <PointsObj 
             geometry={new THREE.BoxGeometry(80, 1, 100, 200, 6, 200)} 
@@ -816,14 +898,17 @@ const WorldEnvironment = () => {
          />
       </group>
 
+      {/* --- CENTER: HYPER VOID SPIRE (Altar) --- */}
       <group position={[0, 8, -110]}>
          <HyperSpireAltar />
       </group>
 
-      <group position={[-30, 8, -105]} rotation={[0, 0.6, 0]}>
+      {/* --- LEFT: HYPER GLITCH MONOLITH --- */}
+      <group position={[-30, 20, -105]} rotation={[0, 0.6, 0]}>
         <HyperGlitchMonolith />
       </group>
 
+      {/* --- RIGHT: HYPER BURNING DEBRIS --- */}
       <group position={[30, 8, -105]}>
          <HyperBurningDebris />
       </group>
@@ -831,6 +916,8 @@ const WorldEnvironment = () => {
     </group>
   );
 };
+
+// --- SYSTEMS ---
 
 const generateRingedPoints = (curve: CatmullRomCurve3, numRings: number, pointsPerRing: number, baseRadius: number, rootColor: Color, tipColor: Color) => {
     const points = [];
@@ -1047,11 +1134,14 @@ const FireMaterial = {
   `
 };
 
+// --- HYPER COMPLEX SYSTEMS (5x Detail) ---
+
 const HyperSpireAltar = () => {
     const groupRef = useRef<THREE.Group>(null);
     const baseColor = PLANET_CONFIG.altarColor;
     const coneColor = PLANET_CONFIG.altarConeColor;
 
+    // Generate 5 concentric rings
     const rings = useMemo(() => {
         return [0, 1, 2, 3, 4].map(i => ({
             radius: 6 + i * 2,
@@ -1063,6 +1153,7 @@ const HyperSpireAltar = () => {
     useFrame((state) => {
         const t = state.clock.getElapsedTime();
         if(groupRef.current) {
+            // Animate rings
             groupRef.current.children.forEach((child, i) => {
                 if (child.userData.isRing) {
                     const r = rings[child.userData.index];
@@ -1075,13 +1166,16 @@ const HyperSpireAltar = () => {
 
   return (
     <group ref={groupRef}>
+      {/* Dense Base Structure */}
       <PointsObj geometry={new THREE.CylinderGeometry(10, 15, 4, 100, 10)} position={[0, 2, 0]} color="#440055" size={0.06} />
       <PointsObj geometry={new THREE.CylinderGeometry(8, 10, 2, 100, 5)} position={[0, 5, 0]} color="#660077" size={0.05} />
       <PointsObj geometry={new THREE.CylinderGeometry(4, 8, 30, 64, 50, true)} position={[0, 15, 0]} color="#8800ff" size={0.04} opacity={0.6} />
       
+      {/* Hyper Beam */}
       <PointsObj geometry={new THREE.CylinderGeometry(1, 1, 80, 24, 150, true)} position={[0, 40, 0]} color={baseColor} size={0.06} opacity={0.9} />
       <PointsObj geometry={new THREE.CylinderGeometry(0.2, 0.2, 80, 12, 50, true)} position={[0, 40, 0]} color="#ffffff" size={0.08} opacity={1} />
 
+      {/* 5 Rotating Rings */}
       {rings.map((r, i) => (
           <points key={i} position={[0, 12 + i * 2, 0]} userData={{ isRing: true, index: i }}>
              <primitive object={new THREE.TorusGeometry(r.radius, 0.2, 16, 120)} attach="geometry" />
@@ -1089,6 +1183,7 @@ const HyperSpireAltar = () => {
           </points>
       ))}
 
+      {/* Floating Crystal Shards */}
       {Array.from({length: 20}).map((_, i) => (
           <PointsObj 
             key={`shard-${i}`}
@@ -1099,6 +1194,7 @@ const HyperSpireAltar = () => {
           />
       ))}
 
+      {/* Explicit Top Cone */}
       <PointsObj 
         geometry={new THREE.ConeGeometry(4, 10, 4, 40, true)} 
         position={[0, 25, 0]} 
@@ -1107,6 +1203,7 @@ const HyperSpireAltar = () => {
         opacity={1} 
       />
       
+      {/* Eye */}
       <group position={[0, 18, 0]}>
         <RefinedEye />
       </group>
@@ -1146,6 +1243,7 @@ const HyperGlitchMonolith = () => {
     });
 
     const monolithPoints = useMemo(() => {
+        // Generate multiple overlapping blocks instead of one
         const blocks = [];
         for(let b=0; b<5; b++) {
             const w = 4 + Math.random()*6;
@@ -1154,6 +1252,7 @@ const HyperGlitchMonolith = () => {
             const offX = (Math.random()-0.5)*5;
             const offY = (Math.random()-0.5)*5;
             
+            // Grid points for each block
             for(let i=0; i<1000; i++) {
                 const px = (Math.random()-0.5)*w + offX;
                 const py = (Math.random()-0.5)*h + offY;
@@ -1166,6 +1265,7 @@ const HyperGlitchMonolith = () => {
 
     return (
         <group ref={groupRef}>
+            {/* Main Fractured Data Cloud */}
             <points>
                 <bufferGeometry>
                     <bufferAttribute attach="attributes-position" count={monolithPoints.length/3} array={monolithPoints} itemSize={3} />
@@ -1179,11 +1279,13 @@ const HyperGlitchMonolith = () => {
                 />
             </points>
             
+            {/* Surrounding Data Ring */}
             <points rotation={[0.5, 0, 0]}>
                  <primitive object={new THREE.TorusGeometry(12, 0.5, 16, 100)} attach="geometry" />
                  <pointsMaterial size={0.05} color="#00ffff" transparent opacity={0.3} />
             </points>
 
+            {/* Core Glitch Planes */}
              <PointsObj 
                 geometry={new THREE.PlaneGeometry(12, 25, 50, 80)} 
                 position={[0, 0, 0]} 
@@ -1197,11 +1299,12 @@ const HyperGlitchMonolith = () => {
 };
 
 const HyperBurningDebris = () => {
+    // Generate massive amount of paper
     const papers = useMemo(() => {
         const arr = [];
         for(let i=0; i<150; i++) {
             const angle = Math.random() * Math.PI;
-            const px = (Math.random() - 0.5) * 20; 
+            const px = (Math.random() - 0.5) * 20; // Wider area
             const pz = (Math.random() - 0.5) * 20;
             const lift = Math.random() * 2;
             arr.push(
@@ -1218,6 +1321,7 @@ const HyperBurningDebris = () => {
         return arr;
     }, []);
 
+    // Broken Stone Columns
     const columns = useMemo(() => {
         return [-6, 6, -3].map((offX, i) => (
              <group key={`col-${i}`} position={[offX, 2, (Math.random()-0.5)*10]} rotation={[0.2, 0, (Math.random()-0.5)]}>
@@ -1230,10 +1334,14 @@ const HyperBurningDebris = () => {
         <group>
             {papers}
             {columns}
+            {/* Primary Fire */}
             <ShaderFire position={[0, 0.5, 0]} color={new THREE.Color("#ff5500")} count={5000} height={18} width={8} />
             <ShaderFire position={[5, 0.5, 3]} color={new THREE.Color("#ff3300")} count={3000} height={12} width={5} />
             <ShaderFire position={[-4, 0.5, -4]} color={new THREE.Color("#ffaa00")} count={3000} height={15} width={6} />
+            
+            {/* High Altitude Embers */}
             <ShaderFire position={[0, 15, 0]} color={new THREE.Color("#ffff00")} count={2000} height={30} width={15} speedMult={3} />
+            
             <pointLight position={[0, 8, 0]} distance={60} intensity={12} color="#ff4400" />
         </group>
     )
