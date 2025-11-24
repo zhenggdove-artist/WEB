@@ -6,7 +6,7 @@ import { CatmullRomCurve3, Vector3, Color, MathUtils } from 'three';
 // --- GLOBAL CONFIGURATION (EDIT HERE / 全局配置) ---
 export const PLANET_CONFIG = {
   // --- CORE PLANET SETTINGS (底部核心星球設定) ---
-  position: { x: 250, y: -350, z: 0 },
+  position: { x: 250, y: -550, z: 0 },
   radius: 200,
   planetColor: "#ffe733",
   planetOuterPointCount: 10000,
@@ -24,18 +24,18 @@ export const PLANET_CONFIG = {
   skyPlanetInnerCount: 50000,
 
   // --- TENTACLE SETTINGS (觸手設定) ---
-  tentacleCount: 100, 
+  tentacleCount: 1, 
   tentacleRootColor: "#ffe733", 
   tentacleTipColor1: "#ffe733", 
   tentacleTipColor2: "#ffe733", 
-  tentacleRadiusMin: 5, 
-  tentacleRadiusMax: 15, 
-  tentacleBaseLength: 3, 
-  tentacleLengthJitter: 10 
+  tentacleRadiusMin: 0, 
+  tentacleRadiusMax: 1, 
+  tentacleBaseLength: 1, 
+  tentacleLengthJitter: 1 
 };
 
 // --- TENTACLE INTERNAL SETTINGS ---
-const BASE_DENSITY = { pointsPerRing: 30 }; 
+const BASE_DENSITY = { pointsPerRing: 0 }; 
 
 const GenericPointShader = {
     vertexShader: `
