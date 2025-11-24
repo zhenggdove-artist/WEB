@@ -305,18 +305,18 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   
   const [position] = useState(new Vector3(0, 0, 10)); 
 
-  // --- [可修改] 恐龍移動速度 (數值越大跑越快) ---
-  const speed = 2;
+  // --- [可修改] 恐龍移動速度 (Speed) ---
+  const speed = 2.0;
 
-  // --- [可修改] 恐龍旋轉速度 (數值越大轉身越快) ---
+  // --- [可修改] 恐龍旋轉速度 (Rotation) ---
   const rotationSpeed = 0.1;
 
   const prevPosition = useRef(position.clone());
 
-  // --- [可修改] 觸發連結的位置 (Target Positions) ---
-  const altarPos = new Vector3(0, 8, -110);      // 展覽連結 (中間)
-  const monumentPos = new Vector3(-30, 8, -105); // Bio 連結 (左邊)
-  const debrisPos = new Vector3(30, 8, -105);    // Projects 連結 (右邊)
+  // --- [可修改] 連結觸發位置 ---
+  const altarPos = new Vector3(0, 8, -110);      
+  const monumentPos = new Vector3(-30, 8, -105); 
+  const debrisPos = new Vector3(30, 8, -105);    
 
   useFrame((state) => {
     if (!groupRef.current || isLocked) return;
@@ -375,7 +375,8 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     groupRef.current.rotation.z = MathUtils.lerp(groupRef.current.rotation.z, moveTurn * -0.1, 0.1);
 
     if (jawRef.current) {
-        const targetJawRot = isMoving ? 0.3 + Math.sin(time * 15) * 0.08 : 0.1 + Math.sin(time * 2) * 0.02;
+        // 自動嘴巴開合動畫 (呼吸/吼叫)
+        const targetJawRot = isMoving ? 0.4 + Math.sin(time * 8) * 0.15 : 0.2 + Math.sin(time * 2) * 0.05;
         jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, targetJawRot, 0.1);
     }
 
@@ -418,16 +419,13 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     }
     prevPosition.current.copy(position);
 
-    // --- [可修改] 連結觸發判定 ---
-    // 中央：Exhibition
+    // --- [可修改] 連結跳轉 ---
     if (checkTrigger(position, altarPos, 12)) {
       onTrigger("https://www.zhenggdove.com/exhibition");
     }
-    // 左側：Bio
     if (checkTrigger(position, monumentPos, 12)) {
       onTrigger("https://www.zhenggdove.com/bio");
     }
-    // 右側：Projects
     if (checkTrigger(position, debrisPos, 12)) {
       onTrigger("https://www.zhenggdove.com/projects");
     }
@@ -448,6 +446,30 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     </group>
   );
 };
+
+const BlinkingEyes = ({ position }: { position: [number, number, number] }) => {
+    const leftEye = useRef<Group>(null);
+    const rightEye = useRef<Group>(null);
+
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
+        // 眨眼邏輯：每 3-4 秒眨一次
+        const blink = Math.sin(t * 1.5) > 0.95 ? 0.1 : 1; 
+        if(leftEye.current) leftEye.current.scale.y = blink;
+        if(rightEye.current) rightEye.current.scale.y = blink;
+    });
+
+    return (
+        <group position={position}>
+            <group position={[0.6, 0.5, 0.4]} ref={leftEye}>
+                <PointsShape geometry={new SphereGeometry(0.15, 8, 8)} color="#ffff00" size={0.08} />
+            </group>
+            <group position={[-0.6, 0.5, 0.4]} ref={rightEye}>
+                <PointsShape geometry={new SphereGeometry(0.15, 8, 8)} color="#ffff00" size={0.08} />
+            </group>
+        </group>
+    )
+}
 
 const TRexModel: React.FC<any> = ({ 
     leftLegRef, rightLegRef, leftArmRef, rightArmRef, jawRef,
@@ -477,8 +499,10 @@ const TRexModel: React.FC<any> = ({
             <group position={[0, -0.4, 1.2]}>
                 <TeethRow count={8} radius={0.45} color={teethColor} inverted={false} />
             </group>
-            <PointsShape geometry={new SphereGeometry(0.15, 8, 8)} position={[0.6, 0.5, 0.4]} color="#ffff00" size={0.08} />
-            <PointsShape geometry={new SphereGeometry(0.15, 8, 8)} position={[-0.6, 0.5, 0.4]} color="#ffff00" size={0.08} />
+            
+            {/* 眨眼組件 */}
+            <BlinkingEyes position={[0, 0, 0]} />
+
             <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[0.6, 0.65, 0.4]} rotation={[0, 0, 0.2]} color="#004400" size={0.04} /> 
             <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[-0.6, 0.65, 0.4]} rotation={[0, 0, -0.2]} color="#004400" size={0.04} />
 
@@ -597,18 +621,18 @@ import * as THREE from 'three';
 import { CatmullRomCurve3, Vector3, Color, MathUtils } from 'three';
 
 // --- [可修改] GLOBAL CONFIGURATION (全局配置) ---
-// 請在這裡修改參數，畫面會即時更新
+// 修改這裡的參數，畫面會即時反映
 export const PLANET_CONFIG = {
-  // --- 底部核心星球設定 ---
-  position: { x: 250, y: -350, z: 0 },    // 星球位置 [X(左右), Y(上下), Z(前後)]
-  radius: 200,                            // 星球半徑 (大小)
-  planetColor: "#ffe733",                 // 星球主要顏色 (黃色)
-  planetOuterPointCount: 10000,           // 星球表面點的數量 (越多越密)
-  planetInnerPointCount: 1000000,          // 星球內部填充點的數量 (解決空心感)
+  // --- 底部核心星球 (觸手發源地) ---
+  position: { x: 250, y: -250, z: 0 },    
+  radius: 200,                            
+  planetColor: "#ffe733",                 
+  planetOuterPointCount: 10000,           
+  planetInnerPointCount: 300000,          
   
   // --- 中央祭壇設定 ---
-  altarColor: "#91041c",       // 祭壇主體顏色 (深紅)
-  altarConeColor: "#ff0066",   // 祭壇頂部三角錐顏色 (亮粉紅)
+  altarColor: "#91041c",       
+  altarConeColor: "#ff0066",   
 
   // --- 天空第二星球設定 (頂部) ---
   skyPlanetPosition: { x: 200, y: 250, z: -100 }, 
@@ -618,25 +642,26 @@ export const PLANET_CONFIG = {
   skyPlanetInnerCount: 50000,
 
   // --- 左側星雲星球設定 (新增) ---
-  leftPlanetPosition: { x: 0, y: 20, z: 400 }, // Z為正值代表左側 (基於座標轉換)
-  leftPlanetRadius: 200,
+  // Z為正值代表左側 (基於座標轉換)
+  leftPlanetPosition: { x: 0, y: 20, z: 400 }, 
+  leftPlanetRadius: 100,
   leftPlanetColor: "#00ccff",
-  leftPlanetNebulaColor: "#00ccff",
+  leftPlanetNebulaColor: "#00ffff",
   leftPlanetPointCount: 40000,
 
   // --- 觸手設定 (Tentacles) ---
-  tentacleCount: 500,          // 觸手數量 (建議 50-200，設為 0 會隱藏)
-  tentacleRootColor: "#4D0000", // 觸手根部顏色 (連接星球處)
-  tentacleTipColor1: "#4D0000", // 觸手末端顏色變體 1
-  tentacleTipColor2: "#4D0000", // 觸手末端顏色變體 2
-  tentacleRadiusMin: 5,         // 觸手最小粗細
-  tentacleRadiusMax: 20,        // 觸手最大粗細
-  tentacleBaseLength: 2,       // 觸手基礎長度 (越大越長)
-  tentacleLengthJitter: 3      // 觸手長度隨機增量 (讓觸手長短不一)
+  tentacleCount: 500,           // 數量：設為 150-300 效果最佳
+  tentacleRootColor: "#4D0000", 
+  tentacleTipColor1: "#4D0000", 
+  tentacleTipColor2: "#4D0000", 
+  tentacleRadiusMin: 5,         // 最小半徑：太小會看不見 (建議 4-8)
+  tentacleRadiusMax: 20,        // 最大半徑：建議 10-20
+  tentacleBaseLength: 2,       // 觸手長度：太短會像鬍渣 (建議 50-150)
+  tentacleLengthJitter: 3      // 長度隨機性
 };
 
 // --- [內部設定] ---
-// 重要：此數值必須大於 0，否則觸手會隱形 (修正之前的 Bug)
+// 點的密度，設為 30 確保觸手有點雲顯示
 const BASE_DENSITY = { pointsPerRing: 30 }; 
 
 const GenericPointShader = {
@@ -687,39 +712,30 @@ const Planet: React.FC<PlanetProps> = ({
 
     let pIndex = 0;
 
-    // 1. OUTER SHELL (Fibonacci)
     for (let i = 0; i < outerCount; i++) {
       const y = 1 - (i / (outerCount - 1)) * 2; 
       const radiusAtY = Math.sqrt(1 - y * y);   
       const theta = phi * i;                    
-
       const x = Math.cos(theta) * radiusAtY;
       const z = Math.sin(theta) * radiusAtY;
-
       const noise = 1 + (Math.random() - 0.5) * noiseAmplitude;
-
       tempPositions[pIndex * 3] = x * size * noise;
       tempPositions[pIndex * 3 + 1] = y * size * noise;
       tempPositions[pIndex * 3 + 2] = z * size * noise;
       pIndex++;
     }
-
-    // 2. INNER VOLUME
     for (let i = 0; i < innerCount; i++) {
         const r = size * Math.cbrt(Math.random()) * 0.95;
         const theta = Math.random() * Math.PI * 2;
         const phiAng = Math.acos(2 * Math.random() - 1);
-
         const x = r * Math.sin(phiAng) * Math.cos(theta);
         const y = r * Math.sin(phiAng) * Math.sin(theta);
         const z = r * Math.cos(phiAng);
-
         tempPositions[pIndex * 3] = x;
         tempPositions[pIndex * 3 + 1] = y;
         tempPositions[pIndex * 3 + 2] = z;
         pIndex++;
     }
-
     return tempPositions;
   }, [outerCount, innerCount, size, noiseAmplitude]);
 
@@ -734,22 +750,9 @@ const Planet: React.FC<PlanetProps> = ({
     <group>
       <points ref={pointsRef}>
         <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            count={particles.length / 3}
-            array={particles}
-            itemSize={3}
-          />
+          <bufferAttribute attach="attributes-position" count={particles.length / 3} array={particles} itemSize={3} />
         </bufferGeometry>
-        <pointsMaterial
-          size={0.6}                   
-          color={color}                
-          sizeAttenuation={true}       
-          transparent={true}
-          opacity={0.8}
-          blending={THREE.AdditiveBlending} 
-          depthWrite={false}
-        />
+        <pointsMaterial size={0.6} color={color} sizeAttenuation={true} transparent={true} opacity={0.8} blending={THREE.AdditiveBlending} depthWrite={false} />
       </points>
       <mesh>
         <sphereGeometry args={[size * 0.9, 32, 32]} />
@@ -759,24 +762,22 @@ const Planet: React.FC<PlanetProps> = ({
   );
 };
 
-// --- NEW NEBULA PLANET ---
+// --- LEFT NEBULA PLANET ---
 const NebulaPlanet = ({ position, radius, color, nebulaColor, pointCount }: any) => {
     const nebulaRef = useRef<THREE.Points>(null);
 
     const nebulaPoints = useMemo(() => {
-        const count = 10000;
+        const count = 20000;
         const pos = new Float32Array(count * 3);
-        const ringRadius = radius * 1.6;
-        const ringWidth = radius * 0.5;
+        const ringRadius = radius * 1.8;
+        const ringWidth = radius * 0.8;
 
         for(let i=0; i<count; i++) {
             const theta = Math.random() * Math.PI * 2;
             const r = ringRadius + (Math.random()-0.5) * ringWidth;
-            
             const x = r * Math.cos(theta);
             const z = r * Math.sin(theta);
-            const y = (Math.random()-0.5) * (radius * 0.4);
-
+            const y = (Math.random()-0.5) * (radius * 0.5);
             pos[i*3] = x;
             pos[i*3+1] = y;
             pos[i*3+2] = z;
@@ -786,28 +787,26 @@ const NebulaPlanet = ({ position, radius, color, nebulaColor, pointCount }: any)
 
     useFrame((state) => {
         if(nebulaRef.current) {
-            nebulaRef.current.rotation.y += 0.002;
-            nebulaRef.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.2) * 0.1;
+            nebulaRef.current.rotation.y += 0.001;
+            nebulaRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.1) * 0.1;
         }
     });
 
     return (
         <group position={position}>
-            {/* Core Planet */}
             <Planet 
                 size={radius} 
                 outerCount={pointCount} 
-                innerCount={pointCount * 2} 
+                innerCount={pointCount} 
                 color={color} 
-                rotationSpeed={0.03} 
-                noiseAmplitude={0.1}
+                rotationSpeed={0.02} 
+                noiseAmplitude={0.05}
             />
-            {/* Nebula Ring */}
             <points ref={nebulaRef}>
                 <bufferGeometry>
                     <bufferAttribute attach="attributes-position" count={nebulaPoints.length/3} array={nebulaPoints} itemSize={3} />
                 </bufferGeometry>
-                <pointsMaterial size={0.5} color={nebulaColor} sizeAttenuation transparent opacity={0.6} blending={THREE.AdditiveBlending} depthWrite={false} />
+                <pointsMaterial size={0.4} color={nebulaColor} sizeAttenuation transparent opacity={0.5} blending={THREE.AdditiveBlending} depthWrite={false} />
             </points>
         </group>
     )
@@ -836,23 +835,17 @@ const WorldEnvironment = () => {
     return items;
   }, []);
 
-  // Remap logic for Core Planet
   const { x, y, z } = PLANET_CONFIG.position;
   const corePlanetPos = [-z, y, -x];
 
-  // Remap logic for Sky Planet
   const { x: sx, y: sy, z: sz } = PLANET_CONFIG.skyPlanetPosition;
   const skyPlanetPos = [-sz, sy, -sx];
 
-  // Remap logic for Left Nebula Planet
   const { x: lx, y: ly, z: lz } = PLANET_CONFIG.leftPlanetPosition;
-  // If Z+ is "Left" in config, and Scene -X is Left. 
-  // Let's assume Config Z maps to Scene -X directly for "Side" movement.
   const leftPlanetPos = [-lz, ly, -lx];
 
   return (
     <group>
-      {/* --- CORE PLANET (Bottom) --- */}
       <group>
          <group position={corePlanetPos as any}>
             <Planet 
@@ -867,20 +860,18 @@ const WorldEnvironment = () => {
          <BiologicalTentacleSystem />
       </group>
 
-      {/* --- SKY PLANET (Top) --- */}
       <group position={skyPlanetPos as any}>
           <Planet 
               size={PLANET_CONFIG.skyPlanetRadius}
               outerCount={PLANET_CONFIG.skyPlanetOuterCount}
               innerCount={PLANET_CONFIG.skyPlanetInnerCount}
               color={PLANET_CONFIG.skyPlanetColor}
-              rotationSpeed={-0.05} // Rotate opposite way
+              rotationSpeed={-0.05} 
               noiseAmplitude={0.08}
           />
           <pointLight distance={200} intensity={2} color={PLANET_CONFIG.skyPlanetColor} />
       </group>
 
-      {/* --- LEFT NEBULA PLANET (New) --- */}
       <NebulaPlanet 
         position={leftPlanetPos}
         radius={PLANET_CONFIG.leftPlanetRadius}
@@ -889,10 +880,8 @@ const WorldEnvironment = () => {
         pointCount={PLANET_CONFIG.leftPlanetPointCount}
       />
 
-      {/* --- STAIRS --- */}
       <group>{stairs}</group>
 
-      {/* --- TOP PLATFORM --- */}
       <group position={[0, 7.8, -75]}>
          <PointsObj 
             geometry={new THREE.BoxGeometry(80, 1, 100, 200, 6, 200)} 
@@ -903,26 +892,21 @@ const WorldEnvironment = () => {
          />
       </group>
 
-      {/* --- CENTER: HYPER VOID SPIRE (Altar) --- */}
       <group position={[0, 8, -110]}>
          <HyperSpireAltar />
       </group>
 
-      {/* --- LEFT: HYPER GLITCH MONOLITH --- */}
+      {/* --- [可修改] 石碑位置 --- */}
       <group position={[-30, 20, -105]} rotation={[0, 0.6, 0]}>
         <HyperGlitchMonolith />
       </group>
 
-      {/* --- RIGHT: HYPER BURNING DEBRIS --- */}
       <group position={[30, 8, -105]}>
          <HyperBurningDebris />
       </group>
-
     </group>
   );
 };
-
-// --- SYSTEMS ---
 
 const generateRingedPoints = (curve: CatmullRomCurve3, numRings: number, pointsPerRing: number, baseRadius: number, rootColor: Color, tipColor: Color) => {
     const points = [];
@@ -1033,6 +1017,7 @@ const BiologicalTentacleSystem = () => {
              const tentacleRadius = tRadMin + Math.random() * (tRadMax - tRadMin);
              const dynamicRings = Math.max(30, Math.floor(length * 2));
 
+             // Ensure visible density
              const { points, sizes, colors } = generateRingedPoints(curve, dynamicRings, BASE_DENSITY.pointsPerRing, tentacleRadius, rootColor, tipColor);
              
              const geo = new THREE.BufferGeometry();
@@ -1139,14 +1124,11 @@ const FireMaterial = {
   `
 };
 
-// --- HYPER COMPLEX SYSTEMS (5x Detail) ---
-
 const HyperSpireAltar = () => {
     const groupRef = useRef<THREE.Group>(null);
     const baseColor = PLANET_CONFIG.altarColor;
     const coneColor = PLANET_CONFIG.altarConeColor;
 
-    // Generate 5 concentric rings
     const rings = useMemo(() => {
         return [0, 1, 2, 3, 4].map(i => ({
             radius: 6 + i * 2,
@@ -1158,7 +1140,6 @@ const HyperSpireAltar = () => {
     useFrame((state) => {
         const t = state.clock.getElapsedTime();
         if(groupRef.current) {
-            // Animate rings
             groupRef.current.children.forEach((child, i) => {
                 if (child.userData.isRing) {
                     const r = rings[child.userData.index];
@@ -1171,16 +1152,13 @@ const HyperSpireAltar = () => {
 
   return (
     <group ref={groupRef}>
-      {/* Dense Base Structure */}
       <PointsObj geometry={new THREE.CylinderGeometry(10, 15, 4, 100, 10)} position={[0, 2, 0]} color="#440055" size={0.06} />
       <PointsObj geometry={new THREE.CylinderGeometry(8, 10, 2, 100, 5)} position={[0, 5, 0]} color="#660077" size={0.05} />
       <PointsObj geometry={new THREE.CylinderGeometry(4, 8, 30, 64, 50, true)} position={[0, 15, 0]} color="#8800ff" size={0.04} opacity={0.6} />
       
-      {/* Hyper Beam */}
       <PointsObj geometry={new THREE.CylinderGeometry(1, 1, 80, 24, 150, true)} position={[0, 40, 0]} color={baseColor} size={0.06} opacity={0.9} />
       <PointsObj geometry={new THREE.CylinderGeometry(0.2, 0.2, 80, 12, 50, true)} position={[0, 40, 0]} color="#ffffff" size={0.08} opacity={1} />
 
-      {/* 5 Rotating Rings */}
       {rings.map((r, i) => (
           <points key={i} position={[0, 12 + i * 2, 0]} userData={{ isRing: true, index: i }}>
              <primitive object={new THREE.TorusGeometry(r.radius, 0.2, 16, 120)} attach="geometry" />
@@ -1188,7 +1166,6 @@ const HyperSpireAltar = () => {
           </points>
       ))}
 
-      {/* Floating Crystal Shards */}
       {Array.from({length: 20}).map((_, i) => (
           <PointsObj 
             key={`shard-${i}`}
@@ -1199,7 +1176,6 @@ const HyperSpireAltar = () => {
           />
       ))}
 
-      {/* Explicit Top Cone */}
       <PointsObj 
         geometry={new THREE.ConeGeometry(4, 10, 4, 40, true)} 
         position={[0, 25, 0]} 
@@ -1208,7 +1184,6 @@ const HyperSpireAltar = () => {
         opacity={1} 
       />
       
-      {/* Eye */}
       <group position={[0, 18, 0]}>
         <RefinedEye />
       </group>
@@ -1248,7 +1223,6 @@ const HyperGlitchMonolith = () => {
     });
 
     const monolithPoints = useMemo(() => {
-        // Generate multiple overlapping blocks instead of one
         const blocks = [];
         for(let b=0; b<5; b++) {
             const w = 4 + Math.random()*6;
@@ -1257,7 +1231,6 @@ const HyperGlitchMonolith = () => {
             const offX = (Math.random()-0.5)*5;
             const offY = (Math.random()-0.5)*5;
             
-            // Grid points for each block
             for(let i=0; i<1000; i++) {
                 const px = (Math.random()-0.5)*w + offX;
                 const py = (Math.random()-0.5)*h + offY;
@@ -1270,7 +1243,6 @@ const HyperGlitchMonolith = () => {
 
     return (
         <group ref={groupRef}>
-            {/* Main Fractured Data Cloud */}
             <points>
                 <bufferGeometry>
                     <bufferAttribute attach="attributes-position" count={monolithPoints.length/3} array={monolithPoints} itemSize={3} />
@@ -1284,13 +1256,11 @@ const HyperGlitchMonolith = () => {
                 />
             </points>
             
-            {/* Surrounding Data Ring */}
             <points rotation={[0.5, 0, 0]}>
                  <primitive object={new THREE.TorusGeometry(12, 0.5, 16, 100)} attach="geometry" />
                  <pointsMaterial size={0.05} color="#00ffff" transparent opacity={0.3} />
             </points>
 
-            {/* Core Glitch Planes */}
              <PointsObj 
                 geometry={new THREE.PlaneGeometry(12, 25, 50, 80)} 
                 position={[0, 0, 0]} 
@@ -1304,12 +1274,11 @@ const HyperGlitchMonolith = () => {
 };
 
 const HyperBurningDebris = () => {
-    // Generate massive amount of paper
     const papers = useMemo(() => {
         const arr = [];
         for(let i=0; i<150; i++) {
             const angle = Math.random() * Math.PI;
-            const px = (Math.random() - 0.5) * 20; // Wider area
+            const px = (Math.random() - 0.5) * 20; 
             const pz = (Math.random() - 0.5) * 20;
             const lift = Math.random() * 2;
             arr.push(
@@ -1326,7 +1295,6 @@ const HyperBurningDebris = () => {
         return arr;
     }, []);
 
-    // Broken Stone Columns
     const columns = useMemo(() => {
         return [-6, 6, -3].map((offX, i) => (
              <group key={`col-${i}`} position={[offX, 2, (Math.random()-0.5)*10]} rotation={[0.2, 0, (Math.random()-0.5)]}>
@@ -1339,14 +1307,10 @@ const HyperBurningDebris = () => {
         <group>
             {papers}
             {columns}
-            {/* Primary Fire */}
             <ShaderFire position={[0, 0.5, 0]} color={new THREE.Color("#ff5500")} count={5000} height={18} width={8} />
             <ShaderFire position={[5, 0.5, 3]} color={new THREE.Color("#ff3300")} count={3000} height={12} width={5} />
             <ShaderFire position={[-4, 0.5, -4]} color={new THREE.Color("#ffaa00")} count={3000} height={15} width={6} />
-            
-            {/* High Altitude Embers */}
             <ShaderFire position={[0, 15, 0]} color={new THREE.Color("#ffff00")} count={2000} height={30} width={15} speedMult={3} />
-            
             <pointLight position={[0, 8, 0]} distance={60} intensity={12} color="#ff4400" />
         </group>
     )
@@ -1416,8 +1380,6 @@ import WorldEnvironment from 'WorldEnvironment';
 import * as THREE from 'three';
 
 // --- [可修改] 文字標籤設定 ---
-// text: 顯示文字
-// position: [X(左右), Y(高度), Z(前後)] - 修改 Y 可以調整高度
 export const LABEL_DATA = [
     { 
       text: "Exhibition", 
@@ -1552,10 +1514,7 @@ export default function App() {
   return (
     <div className="app-container">
       <Canvas
-        // --- [可修改] 初始相機設定 ---
-        // position: [X, Y, Z] (Z 越大離恐龍越遠)
-        // fov: 視野範圍
-        camera={{ position: [0, 15, 90], fov: 50 }}
+        camera={{ position: [0, 15, 80], fov: 50 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: false }}
       >
@@ -1564,6 +1523,8 @@ export default function App() {
           <Scene onTrigger={handleTrigger} isLocked={isFading} />
           <Stars radius={100} depth={50} count={6000} factor={4} saturation={1} fade speed={2} />
         </Suspense>
+        {/* --- [可修改] 相機控制 --- */}
+        {/* enableZoom: 允許縮放, enableRotate: 允許旋轉 */}
         <OrbitControls makeDefault enableZoom={true} enablePan={false} /> 
       </Canvas>
       <UIOverlay isFading={isFading} />
