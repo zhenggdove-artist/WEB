@@ -284,7 +284,7 @@ import * as THREE from 'three';
 // --- [可修改] 恐龍火焰噴射長度與設定 ---
 const BREATH_CONFIG = {
     length: 6.0,       // 火焰噴射的最大距離 (長度)
-    speed: 0.09,        // 火焰粒子的飛行速度
+    speed: 0.27,        // 火焰粒子的飛行速度 (提高以加快水平噴射)
     spread: 1.1,        // 火焰擴散的寬度 (錐形角度)
     particleSize: 0.3,  // 每個火焰點的大小
     offset: { x: 0, y: 1, z: 1.2 } // 發射點相對於下顎的位置
@@ -390,7 +390,7 @@ const BreathMaterial = {
             
             vec3 pos = position;
             // Move particles forward
-            pos.z += age; 
+            pos.z += age * aVelocity.z; 
             
             // --- DYNAMIC CLIPPING FOR ANIMATION ---
             // Current max visible length based on uFireScale (0 to 1)
@@ -463,7 +463,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             pos[i*3+2] = 0; 
             vel[i*3] = (Math.random()-0.5);
             vel[i*3+1] = (Math.random()-0.5);
-            vel[i*3+2] = 0;
+            vel[i*3+2] = 0.8 + Math.random() * 0.6; // Forward push variance
             const c = colorPalette[Math.floor(Math.random() * colorPalette.length)];
             col[i*3] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b;
             off[i] = Math.random() * 10.0;
@@ -562,6 +562,9 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             const currentScale = state === 'FADING' ? 1 : progress.current;
             mat.uniforms.uFireScale.value = currentScale;
             mat.uniforms.uFade.value = fadeRef.current;
+            // Counter jaw rotation to keep flame horizontal
+            const mouthAngle = breathStatus.current.mouthAngle || 0;
+            meshRef.current.rotation.x = -mouthAngle;
             // Hide mesh if idle or faded
             meshRef.current.visible = (state === 'FIRING' || state === 'FADING') && fadeRef.current > 0.01; 
         }
@@ -705,7 +708,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const [position] = useState(new Vector3(0, 0, 10)); 
 
   // --- Breath Status Ref (Shared between Player and DinoBreath) ---
-  const breathStatus = useRef({ isFiring: false, isMouthOpen: false });
+    const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0 });
 
   // --- [可修改] 恐龍移動速度 (Speed) ---
   const speed = 2.0;
@@ -778,6 +781,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     const lowerTarget = mouthWideOpen ? 0.9 : defaultJawRot;
     if (jawRef.current) {
         jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, lowerTarget, mouthWideOpen ? 0.2 : 0.1);
+        breathStatus.current.mouthAngle = jawRef.current.rotation.x;
     }
     if (upperJawRef.current) {
         const upperTarget = mouthWideOpen ? -0.35 : 0.05;
