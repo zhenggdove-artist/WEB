@@ -280,15 +280,16 @@ import { joystickState } from 'UIOverlay';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 
-// --- [可修改] 恐龍火焰噴射長度與設定 ---
+// --- [???] ???????? ---
 const BREATH_CONFIG = {
-    length: 2,       // 火焰噴射的最大距離 (長度)
-    speed: 1.0,        // 火焰粒子的飛行速度
-    spread: 2,        // 火焰擴散的寬度 (錐形角度)
-    particleSize: 0.1,  // 每個火焰點的大小
-    // [可修改] 恐龍吐火焰的發射座標 (相對於下顎)
-    offset: { x: 0, y: 1, z: 1.2 } // 發射點相對於下顎的位置
+    length: 8,          // [???] ???? (????)
+    speed: 50.0,        // [???] ?????????
+    spread: 2,          // [???] ??????
+    particleSize: 0.1,  // [???] ??????
+    offset: { x: 0, y: 0.8, z: 1.2 } // [???] ???????????
 };
+
+
 
 // --- HELPER COMPONENTS (Topological Order for Reference) ---
 
@@ -359,15 +360,16 @@ const BlinkingEyes = ({ position }: { position: [number, number, number] }) => {
     )
 }
 
-// --- DYNAMIC FIRE BREATH SYSTEM ---
+// --- [???] ???????? ---
 
 const BreathMaterial = {
     uniforms: {
         uTime: { value: 0 },
         uFireScale: { value: 0.0 }, // 0.0 to 1.0 (Controls length flow)
-        uLength: { value: 5 },
-        uSpeed: { value: 5 },
-        uSpread: { value: 1 }
+        uLength: { value: BREATH_CONFIG.length },
+        uSpeed: { value: BREATH_CONFIG.speed },
+        uSpread: { value: BREATH_CONFIG.spread },
+        uGlobalAlpha: { value: 1.0 }
     },
     vertexShader: `
         uniform float uTime;
@@ -420,25 +422,33 @@ const BreathMaterial = {
         }
     `,
     fragmentShader: `
+        uniform float uGlobalAlpha;
         varying vec3 vColor;
         varying float vAlpha;
         void main() {
             if(vAlpha < 0.01) discard;
             vec2 coord = gl_PointCoord - vec2(0.5);
             if(length(coord) > 0.5) discard;
-            gl_FragColor = vec4(vColor, vAlpha);
+            gl_FragColor = vec4(vColor, vAlpha * uGlobalAlpha);
         }
     `
 };
 
 const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React.RefObject<Group> }) => {
     const meshRef = useRef<THREE.Points>(null);
-    const [state, setState] = useState<'IDLE' | 'PRE_FIRE' | 'FIRING' | 'COOLDOWN'>('IDLE');
+    const [state, setState] = useState<'IDLE' | 'WINDUP' | 'FIRING' | 'FADE'>('IDLE');
     
-    // Timer refs
-    const progress = useRef(0);
-    const nextTriggerTime = useRef(4.5 + Math.random() * 1.5); // ~5s cadence
-    const timerRef = useRef(0);
+    // [可修改] 噴火節奏設定
+    const WINDUP_DURATION = 0.2;               // 噴火前張嘴時間
+    const FIRE_DURATION = 0.5;                // 持續噴射時間
+    const FADE_DURATION = 0.25;               // 火焰消散時間
+    const TRIGGER_GAP_BASE = 4.5;             // 噴火間隔基準秒數
+    const TRIGGER_GAP_RAND = 1.5;             // 噴火間隔隨機加成
+
+    const phaseTimer = useRef(0);
+    const nextTriggerTime = useRef(TRIGGER_GAP_BASE + Math.random() * TRIGGER_GAP_RAND);
+    const fireScaleRef = useRef(0);
+    const alphaRef = useRef(0);
 
     // Particle Gen
     const particleCount = 1500;
@@ -472,7 +482,8 @@ const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React
         uFireScale: { value: 0 },
         uLength: { value: BREATH_CONFIG.length },
         uSpeed: { value: BREATH_CONFIG.speed },
-        uSpread: { value: BREATH_CONFIG.spread }
+        uSpread: { value: BREATH_CONFIG.spread },
+        uGlobalAlpha: { value: 1 }
     }), []);
 
     useFrame((rState, delta) => {
@@ -483,40 +494,46 @@ const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React
             case 'IDLE':
                 breathStatus.current.isFiring = false;
                 if (time > nextTriggerTime.current) {
-                    setState('PRE_FIRE');
-                    timerRef.current = 0; // Reset local timer
+                    setState('WINDUP');
+                    phaseTimer.current = 0;
+                    fireScaleRef.current = 0;
+                    alphaRef.current = 0;
                 }
                 break;
 
-            case 'PRE_FIRE':
-                // Open jaw BEFORE firing
-                breathStatus.current.isFiring = true; 
-                timerRef.current += delta;
-                if (timerRef.current > 0.2) { // Faster pre-fire windup
+            case 'WINDUP':
+                breathStatus.current.isFiring = true;
+                phaseTimer.current += delta;
+                fireScaleRef.current = Math.min(1, phaseTimer.current / WINDUP_DURATION);
+                alphaRef.current = fireScaleRef.current;
+                if (phaseTimer.current >= WINDUP_DURATION) {
                     setState('FIRING');
-                    progress.current = 0.0; // CRITICAL RESET: Start animation from 0
+                    phaseTimer.current = 0;
+                    fireScaleRef.current = 1;
+                    alphaRef.current = 1;
                 }
                 break;
 
             case 'FIRING':
                 breathStatus.current.isFiring = true;
-                // Animate progress 0 -> 1 (Shooting out)
-                progress.current += delta * 2.2; 
-                if (progress.current >= 1.0) {
-                    progress.current = 1.0;
-                    setState('COOLDOWN');
+                phaseTimer.current += delta;
+                fireScaleRef.current = 1;
+                alphaRef.current = 1;
+                if (phaseTimer.current >= FIRE_DURATION) {
+                    setState('FADE');
+                    phaseTimer.current = 0;
+                    breathStatus.current.isFiring = false; // 讓下個階段開始閉嘴
                 }
                 break;
 
-            case 'COOLDOWN':
-                breathStatus.current.isFiring = true;
-                // Animate progress 1 -> 0 (Retracting/Fading)
-                progress.current = Math.max(0, progress.current - delta * 8);
-                if (progress.current <= 0.05) {
-                    progress.current = 0;
-                    breathStatus.current.isFiring = false;
+            case 'FADE':
+                phaseTimer.current += delta;
+                fireScaleRef.current = 1; // 保持長度不收縮，僅透明度下降
+                alphaRef.current = Math.max(0, 1 - phaseTimer.current / FADE_DURATION);
+                if (alphaRef.current <= 0.01) {
+                    alphaRef.current = 0;
                     setState('IDLE');
-                    nextTriggerTime.current = time + 4.5 + Math.random() * 1.5; // ~5s before next fire
+                    nextTriggerTime.current = time + TRIGGER_GAP_BASE + Math.random() * TRIGGER_GAP_RAND;
                 }
                 break;
         }
@@ -525,13 +542,14 @@ const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React
         if (meshRef.current) {
             const mat = meshRef.current.material as THREE.ShaderMaterial;
             mat.uniforms.uTime.value += delta;
-            // Map progress to uFireScale
-            mat.uniforms.uFireScale.value = progress.current;
-            // Hide mesh if idle
-            meshRef.current.visible = state === 'FIRING' || state === 'COOLDOWN'; 
-            // Counter jaw pitch so flame stays horizontal (slight upward bias)
+            mat.uniforms.uFireScale.value = fireScaleRef.current;
+            mat.uniforms.uGlobalAlpha.value = alphaRef.current;
+            mat.uniforms.uLength.value = BREATH_CONFIG.length;
+            mat.uniforms.uSpeed.value = BREATH_CONFIG.speed;
+            mat.uniforms.uSpread.value = BREATH_CONFIG.spread;
+            meshRef.current.visible = alphaRef.current > 0.01 && state !== 'IDLE'; 
             const jawAngle = jawRef?.current ? jawRef.current.rotation.x : 0;
-            meshRef.current.rotation.x = -jawAngle + 0.05;
+            meshRef.current.rotation.x = -jawAngle + 0.05; // 平射微微上揚
         }
     });
 
