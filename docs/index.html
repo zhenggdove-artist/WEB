@@ -272,193 +272,81 @@ export default UIOverlay;
 
     <!-- FILE: components/Player.tsx -->
     <script type="text/plain" id="vfs-Player">
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Group, MathUtils, BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry } from 'three';
 import { useInput } from 'useInput';
 import { joystickState } from 'UIOverlay';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import * as THREE from 'three';
 
-interface PlayerProps {
-  onTrigger: (url: string) => void;
-  isLocked: boolean;
-}
+// --- [可修改] 恐龍火焰噴射長度與設定 ---
+const BREATH_CONFIG = {
+    length: 6.0,       // 火焰噴射的最大距離 (長度)
+    speed: 10.0,        // 火焰粒子的飛行速度
+    spread: 1.5,        // 火焰擴散的寬度 (錐形角度)
+    particleSize: 0.3,  // 每個火焰點的大小
+    // [可修改] 恐龍吐火焰的發射座標 (相對於下顎)
+    offset: { x: 0, y: 0.3, z: 1.2 } // 發射點相對於下顎的位置
+};
+
+// --- HELPER COMPONENTS (Topological Order for Reference) ---
 
 const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
   return pos.distanceTo(target) < range;
 };
 
-const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
-  const groupRef = useRef<Group>(null);
-  const leftLegRef = useRef<Group>(null);
-  const rightLegRef = useRef<Group>(null);
-  const leftArmRef = useRef<Group>(null);
-  const rightArmRef = useRef<Group>(null);
-  const jawRef = useRef<Group>(null); 
-  
-  const tailBaseRef = useRef<Group>(null);
-  const tailMidRef = useRef<Group>(null);
-  const tailTipRef = useRef<Group>(null);
+const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity = 1 }: any) => {
+    return (
+        <points position={position} rotation={rotation} scale={scale}>
+            <primitive object={geometry} attach="geometry" />
+            <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={opacity} />
+        </points>
+    )
+}
 
-  const { input } = useInput();
-  const { camera, controls } = useThree();
-  
-  const [position] = useState(new Vector3(0, 0, 10)); 
-
-  // --- [可修改] 恐龍移動速度 (Speed) ---
-  const speed = 2.0;
-
-  // --- [可修改] 恐龍旋轉速度 (Rotation) ---
-  const rotationSpeed = 0.1;
-
-  const prevPosition = useRef(position.clone());
-
-  // --- [可修改] 連結觸發位置 ---
-  const altarPos = new Vector3(0, 8, -110);      
-  const monumentPos = new Vector3(-30, 8, -105); 
-  const debrisPos = new Vector3(30, 8, -105);    
-
-  useFrame((state) => {
-    if (!groupRef.current || isLocked) return;
-
-    let moveForward = 0;
-    let moveTurn = 0;
-
-    if (input.forward) moveForward += 1;
-    if (input.backward) moveForward -= 1;
-    if (input.left) moveTurn += 1;
-    if (input.right) moveTurn -= 1;
-
-    if (Math.abs(joystickState.y) > 0.1 || Math.abs(joystickState.x) > 0.1) {
-      moveForward = joystickState.y;
-      moveTurn = -joystickState.x;
+const TeethRow = ({ count, radius, color, inverted }: any) => {
+    const teeth = [];
+    const dir = inverted ? -1 : 1;
+    for(let i=0; i<count; i++) {
+        const t = (i / (count - 1)); 
+        const angle = (t - 0.5) * 1.5; 
+        const x = Math.sin(angle) * radius * 1.2;
+        const z = Math.cos(angle) * radius; 
+        teeth.push(
+            <PointsShape 
+                key={i} 
+                geometry={new ConeGeometry(0.05, 0.18, 5)} 
+                position={[x, dir * 0.1, z]} 
+                rotation={[dir * Math.PI, 0, 0]} 
+                color={color} 
+                size={0.04} 
+            />
+        )
     }
+    return <group>{teeth}</group>;
+}
 
-    groupRef.current.rotation.y += moveTurn * rotationSpeed;
-
-    const direction = new Vector3(0, 0, -1);
-    direction.applyAxisAngle(new Vector3(0, 1, 0), groupRef.current.rotation.y);
-    
-    if (moveForward !== 0) {
-      const newPos = position.clone().addScaledVector(direction, moveForward * speed);
-      
-      if (newPos.x > 35) newPos.x = 35;
-      if (newPos.x < -35) newPos.x = -35;
-      if (newPos.z > 15) newPos.z = 15;
-      if (newPos.z < -125) newPos.z = -125;
-
-      position.copy(newPos);
-    }
-
-    const stairStartZ = -5;
-    const stairEndZ = -25;
-    const topY = 8;
-    
-    if (position.z < stairStartZ && position.z > stairEndZ) {
-      const ratio = (position.z - stairStartZ) / (stairEndZ - stairStartZ);
-      position.y = MathUtils.lerp(0, topY, ratio);
-    } else if (position.z <= stairEndZ) {
-        position.y = topY;
-    } else {
-        position.y = 0;
-    }
-
-    const time = state.clock.getElapsedTime();
-    const isMoving = Math.abs(moveForward) > 0.1 || Math.abs(moveTurn) > 0.1;
-    
-    const bobFreq = 10;
-    const bobAmp = 0.15;
-    const bob = isMoving ? Math.sin(time * bobFreq) * bobAmp : Math.sin(time * 1.5) * 0.02;
-    
-    const targetTilt = isMoving ? moveForward * 0.2 : 0;
-    groupRef.current.rotation.x = MathUtils.lerp(groupRef.current.rotation.x, targetTilt, 0.1);
-    groupRef.current.rotation.z = MathUtils.lerp(groupRef.current.rotation.z, moveTurn * -0.1, 0.1);
-
-    if (jawRef.current) {
-        // 自動嘴巴開合動畫 (呼吸/吼叫)
-        const targetJawRot = isMoving ? 0.4 + Math.sin(time * 8) * 0.15 : 0.2 + Math.sin(time * 2) * 0.05;
-        jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, targetJawRot, 0.1);
-    }
-
-    if (leftLegRef.current && rightLegRef.current) {
-        if (isMoving) {
-            const walkCycle = time * 10; 
-            const strideAngle = 0.6; 
-            leftLegRef.current.rotation.x = Math.sin(walkCycle) * strideAngle;
-            rightLegRef.current.rotation.x = Math.sin(walkCycle + Math.PI) * strideAngle;
-        } else {
-            leftLegRef.current.rotation.x = MathUtils.lerp(leftLegRef.current.rotation.x, 0, 0.1);
-            rightLegRef.current.rotation.x = MathUtils.lerp(rightLegRef.current.rotation.x, 0, 0.1);
-        }
-    }
-
-    if (tailBaseRef.current && tailMidRef.current && tailTipRef.current) {
-        const tailSpeed = isMoving ? 12 : 2;
-        const tailAmp = isMoving ? 0.15 : 0.05;
-        tailBaseRef.current.rotation.y = Math.sin(time * tailSpeed) * tailAmp;
-        tailMidRef.current.rotation.y = Math.sin(time * tailSpeed - 0.5) * tailAmp;
-        tailTipRef.current.rotation.y = Math.sin(time * tailSpeed - 1.0) * tailAmp;
-    }
-
-    if (leftArmRef.current && rightArmRef.current) {
-        leftArmRef.current.rotation.x = -0.5 + Math.sin(time * 3) * 0.1;
-        rightArmRef.current.rotation.x = -0.5 + Math.cos(time * 3) * 0.1;
-    }
-
-    groupRef.current.position.copy(position);
-    groupRef.current.position.y += bob + 2.7; 
-
-    const moveDelta = position.clone().sub(prevPosition.current);
-    if(moveDelta.lengthSq() > 0.00001) {
-        camera.position.add(moveDelta);
-        if(controls) {
-             const orbit = controls as unknown as OrbitControlsImpl;
-             orbit.target.add(moveDelta);
-             orbit.update();
-        }
-    }
-    prevPosition.current.copy(position);
-
-    // --- [可修改] 連結跳轉 ---
-    if (checkTrigger(position, altarPos, 12)) {
-      onTrigger("https://www.zhenggdove.com/exhibition");
-    }
-    if (checkTrigger(position, monumentPos, 12)) {
-      onTrigger("https://www.zhenggdove.com/bio");
-    }
-    if (checkTrigger(position, debrisPos, 12)) {
-      onTrigger("https://www.zhenggdove.com/projects");
-    }
-  });
-
-  return (
-    <group ref={groupRef} name="PlayerGroup">
-      <TRexModel 
-        leftLegRef={leftLegRef} 
-        rightLegRef={rightLegRef}
-        leftArmRef={leftArmRef}
-        rightArmRef={rightArmRef}
-        jawRef={jawRef}
-        tailBaseRef={tailBaseRef}
-        tailMidRef={tailMidRef}
-        tailTipRef={tailTipRef}
-      />
-    </group>
-  );
-};
+const ThreeToedClaw = ({ position, rotation, scale = 1, color }: any) => {
+    return (
+        <group position={position} rotation={rotation} scale={[scale, scale, scale]}>
+            <PointsShape geometry={new SphereGeometry(0.4, 8, 8)} scale={[1, 0.5, 1]} color={color} size={0.04} />
+            <PointsShape geometry={new ConeGeometry(0.08, 0.6, 6)} position={[0, 0, 0.5]} rotation={[1.6, 0, 0]} color={color} size={0.03} />
+            <PointsShape geometry={new ConeGeometry(0.08, 0.5, 6)} position={[-0.25, 0, 0.4]} rotation={[1.6, 0, 0.3]} color={color} size={0.03} />
+            <PointsShape geometry={new ConeGeometry(0.08, 0.5, 6)} position={[0.25, 0, 0.4]} rotation={[1.6, 0, -0.3]} color={color} size={0.03} />
+        </group>
+    )
+}
 
 const BlinkingEyes = ({ position }: { position: [number, number, number] }) => {
     const leftEye = useRef<Group>(null);
     const rightEye = useRef<Group>(null);
-
     useFrame((state) => {
         const t = state.clock.getElapsedTime();
-        // 眨眼邏輯：每 3-4 秒眨一次
         const blink = Math.sin(t * 1.5) > 0.95 ? 0.1 : 1; 
         if(leftEye.current) leftEye.current.scale.y = blink;
         if(rightEye.current) rightEye.current.scale.y = blink;
     });
-
     return (
         <group position={position}>
             <group position={[0.6, 0.5, 0.4]} ref={leftEye}>
@@ -471,9 +359,202 @@ const BlinkingEyes = ({ position }: { position: [number, number, number] }) => {
     )
 }
 
+// --- DYNAMIC FIRE BREATH SYSTEM ---
+
+const BreathMaterial = {
+    uniforms: {
+        uTime: { value: 0 },
+        uFireScale: { value: 0.0 }, // 0.0 to 1.0 (Controls length flow)
+        uLength: { value: 5 },
+        uSpeed: { value: 5 },
+        uSpread: { value: 1 }
+    },
+    vertexShader: `
+        uniform float uTime;
+        uniform float uFireScale;
+        uniform float uLength;
+        uniform float uSpeed;
+        uniform float uSpread;
+        attribute vec3 aVelocity;
+        attribute vec3 aColor;
+        attribute float aOffset;
+        varying vec3 vColor;
+        varying float vAlpha;
+
+        void main() {
+            vColor = aColor;
+            
+            // Age creates the forward movement loop
+            float age = mod(uTime * uSpeed + aOffset, uLength);
+            
+            vec3 pos = position;
+            // Move particles forward
+            pos.z += age; 
+            
+            // --- DYNAMIC CLIPPING FOR ANIMATION ---
+            // Current max visible length based on uFireScale (0 to 1)
+            float currentMaxLength = uLength * uFireScale;
+            float scale = 1.0;
+            
+            // If particle is further than current anim length, hide it
+            if (pos.z > currentMaxLength) {
+                scale = 0.0;
+            }
+            // If scale is effectively 0, hide everything
+            if (uFireScale < 0.01) {
+                scale = 0.0;
+            }
+
+            // Spread outward as Z increases
+            float spreadFactor = (pos.z / uLength) * uSpread;
+            pos.x += aVelocity.x * spreadFactor;
+            pos.y += aVelocity.y * spreadFactor;
+
+            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            
+            gl_PointSize = scale * (1.0 - pos.z/uLength) * 500.0 / -mvPosition.z;
+
+            // Fade out at end of max length
+            vAlpha = scale * (1.0 - smoothstep(uLength * 0.8, uLength, pos.z));
+        }
+    `,
+    fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        void main() {
+            if(vAlpha < 0.01) discard;
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            if(length(coord) > 0.5) discard;
+            gl_FragColor = vec4(vColor, vAlpha);
+        }
+    `
+};
+
+const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
+    const meshRef = useRef<THREE.Points>(null);
+    const [state, setState] = useState<'IDLE' | 'PRE_FIRE' | 'FIRING' | 'COOLDOWN'>('IDLE');
+    
+    // Timer refs
+    const progress = useRef(0);
+    const nextTriggerTime = useRef(2.0);
+    const timerRef = useRef(0);
+
+    // Particle Gen
+    const particleCount = 1500;
+    const { positions, velocities, colors, offsets } = useMemo(() => {
+        const pos = new Float32Array(particleCount * 3);
+        const vel = new Float32Array(particleCount * 3);
+        const col = new Float32Array(particleCount * 3);
+        const off = new Float32Array(particleCount);
+        const colorPalette = [
+            new THREE.Color("#ff0000"), 
+            new THREE.Color("#ff6600"), 
+            new THREE.Color("#ffcc00") 
+        ];
+        for(let i=0; i<particleCount; i++) {
+            pos[i*3] = (Math.random()-0.5) * 0.1;
+            pos[i*3+1] = (Math.random()-0.5) * 0.1;
+            pos[i*3+2] = 0; 
+            vel[i*3] = (Math.random()-0.5);
+            vel[i*3+1] = (Math.random()-0.5);
+            vel[i*3+2] = 0;
+            const c = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+            col[i*3] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b;
+            off[i] = Math.random() * 10.0;
+        }
+        return { positions: pos, velocities: vel, colors: col, offsets: off };
+    }, []);
+
+    // Memoize uniforms to prevent reset
+    const uniforms = useMemo(() => ({
+        uTime: { value: 0 },
+        uFireScale: { value: 0 },
+        uLength: { value: BREATH_CONFIG.length },
+        uSpeed: { value: BREATH_CONFIG.speed },
+        uSpread: { value: BREATH_CONFIG.spread }
+    }), []);
+
+    useFrame((rState, delta) => {
+        const time = rState.clock.getElapsedTime();
+        
+        // --- ANIMATION STATE MACHINE ---
+        switch (state) {
+            case 'IDLE':
+                breathStatus.current.isFiring = false;
+                if (time > nextTriggerTime.current) {
+                    setState('PRE_FIRE');
+                    timerRef.current = 0; // Reset local timer
+                }
+                break;
+
+            case 'PRE_FIRE':
+                // Open jaw BEFORE firing
+                breathStatus.current.isFiring = true; 
+                timerRef.current += delta;
+                if (timerRef.current > 0.4) { // Wait 0.4s
+                    setState('FIRING');
+                    progress.current = 0.0; // CRITICAL RESET: Start animation from 0
+                }
+                break;
+
+            case 'FIRING':
+                breathStatus.current.isFiring = true;
+                // Animate progress 0 -> 1 (Shooting out)
+                progress.current += delta * 1.2; 
+                if (progress.current >= 1.0) {
+                    progress.current = 1.0;
+                    setState('COOLDOWN');
+                }
+                break;
+
+            case 'COOLDOWN':
+                breathStatus.current.isFiring = true;
+                // Animate progress 1 -> 0 (Retracting/Fading)
+                progress.current -= delta * 1.5;
+                if (progress.current <= 0) {
+                    progress.current = 0;
+                    breathStatus.current.isFiring = false;
+                    setState('IDLE');
+                    nextTriggerTime.current = time + 1.0 + Math.random() * 2.0; // Random delay
+                }
+                break;
+        }
+
+        // Update Shader
+        if (meshRef.current) {
+            const mat = meshRef.current.material as THREE.ShaderMaterial;
+            mat.uniforms.uTime.value += delta;
+            // Map progress to uFireScale
+            mat.uniforms.uFireScale.value = progress.current;
+            // Hide mesh if idle
+            meshRef.current.visible = state !== 'IDLE'; 
+        }
+    });
+
+    return (
+        <points ref={meshRef} position={[BREATH_CONFIG.offset.x, BREATH_CONFIG.offset.y, BREATH_CONFIG.offset.z]} rotation={[-0.2, 0, 0]}>
+            <bufferGeometry>
+                <bufferAttribute attach="attributes-position" count={particleCount} array={positions} itemSize={3} />
+                <bufferAttribute attach="attributes-aVelocity" count={particleCount} array={velocities} itemSize={3} />
+                <bufferAttribute attach="attributes-aColor" count={particleCount} array={colors} itemSize={3} />
+                <bufferAttribute attach="attributes-aOffset" count={particleCount} array={offsets} itemSize={1} />
+            </bufferGeometry>
+            <shaderMaterial 
+                vertexShader={BreathMaterial.vertexShader}
+                fragmentShader={BreathMaterial.fragmentShader}
+                uniforms={uniforms}
+                transparent
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+            />
+        </points>
+    );
+};
+
 const TRexModel: React.FC<any> = ({ 
     leftLegRef, rightLegRef, leftArmRef, rightArmRef, jawRef,
-    tailBaseRef, tailMidRef, tailTipRef
+    tailBaseRef, tailMidRef, tailTipRef, breathStatus 
 }) => {
   const skinColor = "#00ff66"; 
   const detailColor = "#00cc44";
@@ -500,7 +581,6 @@ const TRexModel: React.FC<any> = ({
                 <TeethRow count={8} radius={0.45} color={teethColor} inverted={false} />
             </group>
             
-            {/* 眨眼組件 */}
             <BlinkingEyes position={[0, 0, 0]} />
 
             <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[0.6, 0.65, 0.4]} rotation={[0, 0, 0.2]} color="#004400" size={0.04} /> 
@@ -513,6 +593,10 @@ const TRexModel: React.FC<any> = ({
                 <group position={[0, 0.3, 1.1]}>
                     <TeethRow count={7} radius={0.4} color={teethColor} inverted={true} />
                 </group>
+
+                {/* --- FIRE BREATH --- */}
+                <DinoBreath breathStatus={breathStatus} />
+
             </group>
           </group>
 
@@ -568,47 +652,167 @@ const TRexModel: React.FC<any> = ({
   );
 };
 
-const TeethRow = ({ count, radius, color, inverted }: any) => {
-    const teeth = [];
-    const dir = inverted ? -1 : 1;
-    for(let i=0; i<count; i++) {
-        const t = (i / (count - 1)); 
-        const angle = (t - 0.5) * 1.5; 
-        const x = Math.sin(angle) * radius * 1.2;
-        const z = Math.cos(angle) * radius; 
-        teeth.push(
-            <PointsShape 
-                key={i} 
-                geometry={new ConeGeometry(0.05, 0.18, 5)} 
-                position={[x, dir * 0.1, z]} 
-                rotation={[dir * Math.PI, 0, 0]} 
-                color={color} 
-                size={0.04} 
-            />
-        )
+const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
+  const groupRef = useRef<Group>(null);
+  const leftLegRef = useRef<Group>(null);
+  const rightLegRef = useRef<Group>(null);
+  const leftArmRef = useRef<Group>(null);
+  const rightArmRef = useRef<Group>(null);
+  const jawRef = useRef<Group>(null); 
+  const tailBaseRef = useRef<Group>(null);
+  const tailMidRef = useRef<Group>(null);
+  const tailTipRef = useRef<Group>(null);
+
+  const { input } = useInput();
+  const { camera, controls } = useThree();
+  const [position] = useState(new Vector3(0, 0, 10)); 
+
+  // --- Breath Status Ref (Shared between Player and DinoBreath) ---
+  const breathStatus = useRef({ isFiring: false });
+
+  // --- [可修改] 恐龍移動速度 (Speed) ---
+  const speed = 2.0;
+  // --- [可修改] 恐龍旋轉速度 (Rotation) ---
+  const rotationSpeed = 0.1;
+
+  const prevPosition = useRef(position.clone());
+
+  // --- [可修改] 連結觸發位置 ---
+  const altarPos = new Vector3(0, 8, -110);      
+  const monumentPos = new Vector3(-30, 8, -105); 
+  const debrisPos = new Vector3(30, 8, -105);    
+
+  useFrame((state) => {
+    if (!groupRef.current || isLocked) return;
+
+    let moveForward = 0;
+    let moveTurn = 0;
+
+    if (input.forward) moveForward += 1;
+    if (input.backward) moveForward -= 1;
+    if (input.left) moveTurn += 1;
+    if (input.right) moveTurn -= 1;
+
+    if (Math.abs(joystickState.y) > 0.1 || Math.abs(joystickState.x) > 0.1) {
+      moveForward = joystickState.y;
+      moveTurn = -joystickState.x;
     }
-    return <group>{teeth}</group>;
-}
 
-const ThreeToedClaw = ({ position, rotation, scale = 1, color }: any) => {
-    return (
-        <group position={position} rotation={rotation} scale={[scale, scale, scale]}>
-            <PointsShape geometry={new SphereGeometry(0.4, 8, 8)} scale={[1, 0.5, 1]} color={color} size={0.04} />
-            <PointsShape geometry={new ConeGeometry(0.08, 0.6, 6)} position={[0, 0, 0.5]} rotation={[1.6, 0, 0]} color={color} size={0.03} />
-            <PointsShape geometry={new ConeGeometry(0.08, 0.5, 6)} position={[-0.25, 0, 0.4]} rotation={[1.6, 0, 0.3]} color={color} size={0.03} />
-            <PointsShape geometry={new ConeGeometry(0.08, 0.5, 6)} position={[0.25, 0, 0.4]} rotation={[1.6, 0, -0.3]} color={color} size={0.03} />
-        </group>
-    )
-}
+    groupRef.current.rotation.y += moveTurn * rotationSpeed;
+    const direction = new Vector3(0, 0, -1);
+    direction.applyAxisAngle(new Vector3(0, 1, 0), groupRef.current.rotation.y);
+    
+    if (moveForward !== 0) {
+      const newPos = position.clone().addScaledVector(direction, moveForward * speed);
+      if (newPos.x > 35) newPos.x = 35;
+      if (newPos.x < -35) newPos.x = -35;
+      if (newPos.z > 15) newPos.z = 15;
+      if (newPos.z < -125) newPos.z = -125;
+      position.copy(newPos);
+    }
 
-const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity = 1 }: any) => {
-    return (
-        <points position={position} rotation={rotation} scale={scale}>
-            <primitive object={geometry} attach="geometry" />
-            <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={opacity} />
-        </points>
-    )
-}
+    const stairStartZ = -5;
+    const stairEndZ = -25;
+    const topY = 8;
+    
+    if (position.z < stairStartZ && position.z > stairEndZ) {
+      const ratio = (position.z - stairStartZ) / (stairEndZ - stairStartZ);
+      position.y = MathUtils.lerp(0, topY, ratio);
+    } else if (position.z <= stairEndZ) {
+        position.y = topY;
+    } else {
+        position.y = 0;
+    }
+
+    const time = state.clock.getElapsedTime();
+    const isMoving = Math.abs(moveForward) > 0.1 || Math.abs(moveTurn) > 0.1;
+    
+    const bobFreq = 10;
+    const bobAmp = 0.15;
+    const bob = isMoving ? Math.sin(time * bobFreq) * bobAmp : Math.sin(time * 1.5) * 0.02;
+    
+    const targetTilt = isMoving ? moveForward * 0.2 : 0;
+    groupRef.current.rotation.x = MathUtils.lerp(groupRef.current.rotation.x, targetTilt, 0.1);
+    groupRef.current.rotation.z = MathUtils.lerp(groupRef.current.rotation.z, moveTurn * -0.1, 0.1);
+
+    // --- JAW LOGIC (SYNCED) ---
+    if (jawRef.current) {
+        if (breathStatus.current.isFiring) {
+            // Force jaw open wide when firing
+             jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, 0.8, 0.2);
+        } else {
+            // Normal breathing / moving
+            const targetJawRot = isMoving ? 0.4 + Math.sin(time * 8) * 0.15 : 0.2 + Math.sin(time * 2) * 0.05;
+            jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, targetJawRot, 0.1);
+        }
+    }
+
+    if (leftLegRef.current && rightLegRef.current) {
+        if (isMoving) {
+            const walkCycle = time * 10; 
+            const strideAngle = 0.6; 
+            leftLegRef.current.rotation.x = Math.sin(walkCycle) * strideAngle;
+            rightLegRef.current.rotation.x = Math.sin(walkCycle + Math.PI) * strideAngle;
+        } else {
+            leftLegRef.current.rotation.x = MathUtils.lerp(leftLegRef.current.rotation.x, 0, 0.1);
+            rightLegRef.current.rotation.x = MathUtils.lerp(rightLegRef.current.rotation.x, 0, 0.1);
+        }
+    }
+
+    if (tailBaseRef.current && tailMidRef.current && tailTipRef.current) {
+        const tailSpeed = isMoving ? 12 : 2;
+        const tailAmp = isMoving ? 0.15 : 0.05;
+        tailBaseRef.current.rotation.y = Math.sin(time * tailSpeed) * tailAmp;
+        tailMidRef.current.rotation.y = Math.sin(time * tailSpeed - 0.5) * tailAmp;
+        tailTipRef.current.rotation.y = Math.sin(time * tailSpeed - 1.0) * tailAmp;
+    }
+
+    if (leftArmRef.current && rightArmRef.current) {
+        leftArmRef.current.rotation.x = -0.5 + Math.sin(time * 3) * 0.1;
+        rightArmRef.current.rotation.x = -0.5 + Math.cos(time * 3) * 0.1;
+    }
+
+    groupRef.current.position.copy(position);
+    groupRef.current.position.y += bob + 2.7; 
+
+    const moveDelta = position.clone().sub(prevPosition.current);
+    if(moveDelta.lengthSq() > 0.00001) {
+        camera.position.add(moveDelta);
+        if(controls) {
+             const orbit = controls as unknown as OrbitControlsImpl;
+             orbit.target.add(moveDelta);
+             orbit.update();
+        }
+    }
+    prevPosition.current.copy(position);
+
+    if (checkTrigger(position, altarPos, 12)) {
+      onTrigger("https://www.zhenggdove.com/exhibition");
+    }
+    if (checkTrigger(position, monumentPos, 12)) {
+      onTrigger("https://www.zhenggdove.com/bio");
+    }
+    if (checkTrigger(position, debrisPos, 12)) {
+      onTrigger("https://www.zhenggdove.com/projects");
+    }
+  });
+
+  return (
+    <group ref={groupRef} name="PlayerGroup">
+      <TRexModel 
+        leftLegRef={leftLegRef} 
+        rightLegRef={rightLegRef}
+        leftArmRef={leftArmRef}
+        rightArmRef={rightArmRef}
+        jawRef={jawRef}
+        tailBaseRef={tailBaseRef}
+        tailMidRef={tailMidRef}
+        tailTipRef={tailTipRef}
+        breathStatus={breathStatus}
+      />
+    </group>
+  );
+};
 
 export default Player;
     </script>
@@ -620,49 +824,47 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { CatmullRomCurve3, Vector3, Color, MathUtils } from 'three';
 
-// --- [可修改] GLOBAL CONFIGURATION (全局配置) ---
-// 修改這裡的參數，畫面會即時反映
-export const PLANET_CONFIG = {
-  // --- 底部核心星球 (觸手發源地) ---
-  position: { x: 250, y: -250, z: 0 },    
-  radius: 200,                            
-  planetColor: "#ffe733",                 
-  planetOuterPointCount: 10000,           
-  planetInnerPointCount: 300000,          
-  
-  // --- 中央祭壇設定 ---
-  altarColor: "#91041c",       
-  altarConeColor: "#ff0066",   
+// --- Material Definitions (Must be at top) ---
+const FireMaterial = {
+  uniforms: {
+    uTime: { value: 0 },
+    uColor: { value: new THREE.Color(1.0, 0.5, 0.0) },
+  },
+  vertexShader: `
+    uniform float uTime;
+    attribute float aOffset;
+    attribute float aSpeed;
+    varying float vAlpha;
+    
+    void main() {
+      vec3 pos = position;
+      float height = 15.0; 
+      float y = mod(pos.y + uTime * aSpeed + aOffset, height);
+      pos.y = y;
+      pos.x += sin(uTime * 2.0 + aOffset + y * 0.2) * (0.5 + y * 0.1);
+      pos.z += cos(uTime * 1.5 + aOffset + y * 0.2) * (0.5 + y * 0.1);
 
-  // --- 天空第二星球設定 (頂部) ---
-  skyPlanetPosition: { x: 200, y: 250, z: -100 }, 
-  skyPlanetRadius: 200,                           
-  skyPlanetColor: "#91041c",                      
-  skyPlanetOuterCount: 38000,                     
-  skyPlanetInnerCount: 50000,
-
-  // --- 左側星雲星球設定 (新增) ---
-  // Z為正值代表左側 (基於座標轉換)
-  leftPlanetPosition: { x: 0, y: 20, z: 400 }, 
-  leftPlanetRadius: 100,
-  leftPlanetColor: "#00ccff",
-  leftPlanetNebulaColor: "#00ffff",
-  leftPlanetPointCount: 40000,
-
-  // --- 觸手設定 (Tentacles) ---
-  tentacleCount: 500,           // 數量：設為 150-300 效果最佳
-  tentacleRootColor: "#4D0000", 
-  tentacleTipColor1: "#4D0000", 
-  tentacleTipColor2: "#4D0000", 
-  tentacleRadiusMin: 5,         // 最小半徑：太小會看不見 (建議 4-8)
-  tentacleRadiusMax: 20,        // 最大半徑：建議 10-20
-  tentacleBaseLength: 2,       // 觸手長度：太短會像鬍渣 (建議 50-150)
-  tentacleLengthJitter: 3      // 長度隨機性
+      vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+      gl_Position = projectionMatrix * mvPosition;
+      gl_PointSize = 200.0 / -mvPosition.z; 
+      
+      vAlpha = 1.0 - pow(y / height, 2.0); 
+      if(vAlpha < 0.0) vAlpha = 0.0;
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 uColor;
+    varying float vAlpha;
+    
+    void main() {
+      vec2 coord = gl_PointCoord - vec2(0.5);
+      float dist = length(coord);
+      if(dist > 0.5) discard;
+      float glow = 1.0 - (dist * 2.0);
+      gl_FragColor = vec4(uColor, vAlpha * glow);
+    }
+  `
 };
-
-// --- [內部設定] ---
-// 點的密度，設為 30 確保觸手有點雲顯示
-const BASE_DENSITY = { pointsPerRing: 30 }; 
 
 const GenericPointShader = {
     vertexShader: `
@@ -685,6 +887,89 @@ const GenericPointShader = {
         }
     `
 };
+
+// --- GLOBAL CONFIGURATION (EDIT HERE) ---
+export const PLANET_CONFIG = {
+  position: { x: 250, y: -550, z: 0 },    
+  radius: 200,                            
+  planetColor: "#ffe733",                 
+  planetOuterPointCount: 10000,           
+  planetInnerPointCount: 300000,          
+  altarColor: "#91041c",       
+  altarConeColor: "#ff0066",   
+  skyPlanetPosition: { x: 200, y: 250, z: -100 }, 
+  skyPlanetRadius: 200,                           
+  skyPlanetColor: "#91041c",                      
+  skyPlanetOuterCount: 38000,                     
+  skyPlanetInnerCount: 50000,
+  leftPlanetPosition: { x: 0, y: 20, z: 400 }, 
+  leftPlanetRadius: 100,
+  leftPlanetColor: "#00ccff",
+  leftPlanetNebulaColor: "#00ffff",
+  leftPlanetPointCount: 40000,
+  tentacleCount: 0,           // CHANGED TO 150 to be visible
+  tentacleRootColor: "#4D0000", 
+  tentacleTipColor1: "#ffe733", 
+  tentacleTipColor2: "#ff5500", 
+  tentacleRadiusMin: 4,         // CHANGED TO 4-12
+  tentacleRadiusMax: 12,        
+  tentacleBaseLength: 80,       
+  tentacleLengthJitter: 40      
+};
+
+// --- CRITICAL FIX: Ensure pointsPerRing is 30 (not 0) ---
+const BASE_DENSITY = { pointsPerRing: 30 }; 
+
+const PointsObj = ({ geometry, position, rotation, color, size, opacity = 1 }: any) => {
+    return (
+        <points position={position} rotation={rotation}>
+            <primitive object={geometry} attach="geometry" />
+            <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={opacity} />
+        </points>
+    );
+};
+
+const ShaderFire = ({ position, color, count = 400, height = 10, width = 3, speedMult = 1 }: any) => {
+    const meshRef = useRef<THREE.Points>(null);
+    const [geoAttributes] = useState(() => {
+        const pos = new Float32Array(count * 3);
+        const offsets = new Float32Array(count);
+        const speeds = new Float32Array(count);
+        for(let i=0; i<count; i++) {
+            pos[i*3] = (Math.random() - 0.5) * width;
+            pos[i*3+1] = Math.random() * height; 
+            pos[i*3+2] = (Math.random() - 0.5) * width;
+            offsets[i] = Math.random() * 10;
+            speeds[i] = (1.0 + Math.random()) * speedMult;
+        }
+        return { pos, offsets, speeds };
+    });
+
+    useFrame((state) => {
+        if(meshRef.current) {
+            const material = meshRef.current.material as THREE.ShaderMaterial;
+            material.uniforms.uTime.value = state.clock.getElapsedTime();
+        }
+    });
+
+    return (
+        <points position={position} ref={meshRef}>
+            <bufferGeometry>
+                <bufferAttribute attach="attributes-position" count={count} array={geoAttributes.pos} itemSize={3} />
+                <bufferAttribute attach="attributes-aOffset" count={count} array={geoAttributes.offsets} itemSize={1} />
+                <bufferAttribute attach="attributes-aSpeed" count={count} array={geoAttributes.speeds} itemSize={1} />
+            </bufferGeometry>
+            <shaderMaterial 
+                vertexShader={FireMaterial.vertexShader}
+                fragmentShader={FireMaterial.fragmentShader}
+                uniforms={{ uTime: { value: 0 }, uColor: { value: color } }}
+                transparent
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+            />
+        </points>
+    )
+}
 
 interface PlanetProps {
   color?: string;
@@ -711,7 +996,6 @@ const Planet: React.FC<PlanetProps> = ({
     const phi = Math.PI * (3 - Math.sqrt(5)); 
 
     let pIndex = 0;
-
     for (let i = 0; i < outerCount; i++) {
       const y = 1 - (i / (outerCount - 1)) * 2; 
       const radiusAtY = Math.sqrt(1 - y * y);   
@@ -750,9 +1034,22 @@ const Planet: React.FC<PlanetProps> = ({
     <group>
       <points ref={pointsRef}>
         <bufferGeometry>
-          <bufferAttribute attach="attributes-position" count={particles.length / 3} array={particles} itemSize={3} />
+          <bufferAttribute
+            attach="attributes-position"
+            count={particles.length / 3}
+            array={particles}
+            itemSize={3}
+          />
         </bufferGeometry>
-        <pointsMaterial size={0.6} color={color} sizeAttenuation={true} transparent={true} opacity={0.8} blending={THREE.AdditiveBlending} depthWrite={false} />
+        <pointsMaterial
+          size={0.6}                   
+          color={color}                
+          sizeAttenuation={true}       
+          transparent={true}
+          opacity={0.8}
+          blending={THREE.AdditiveBlending} 
+          depthWrite={false}
+        />
       </points>
       <mesh>
         <sphereGeometry args={[size * 0.9, 32, 32]} />
@@ -762,7 +1059,6 @@ const Planet: React.FC<PlanetProps> = ({
   );
 };
 
-// --- LEFT NEBULA PLANET ---
 const NebulaPlanet = ({ position, radius, color, nebulaColor, pointCount }: any) => {
     const nebulaRef = useRef<THREE.Points>(null);
 
@@ -837,10 +1133,8 @@ const WorldEnvironment = () => {
 
   const { x, y, z } = PLANET_CONFIG.position;
   const corePlanetPos = [-z, y, -x];
-
   const { x: sx, y: sy, z: sz } = PLANET_CONFIG.skyPlanetPosition;
   const skyPlanetPos = [-sz, sy, -sx];
-
   const { x: lx, y: ly, z: lz } = PLANET_CONFIG.leftPlanetPosition;
   const leftPlanetPos = [-lz, ly, -lx];
 
@@ -896,7 +1190,6 @@ const WorldEnvironment = () => {
          <HyperSpireAltar />
       </group>
 
-      {/* --- [可修改] 石碑位置 --- */}
       <group position={[-30, 20, -105]} rotation={[0, 0.6, 0]}>
         <HyperGlitchMonolith />
       </group>
@@ -1017,7 +1310,6 @@ const BiologicalTentacleSystem = () => {
              const tentacleRadius = tRadMin + Math.random() * (tRadMax - tRadMin);
              const dynamicRings = Math.max(30, Math.floor(length * 2));
 
-             // Ensure visible density
              const { points, sizes, colors } = generateRingedPoints(curve, dynamicRings, BASE_DENSITY.pointsPerRing, tentacleRadius, rootColor, tipColor);
              
              const geo = new THREE.BufferGeometry();
@@ -1083,47 +1375,6 @@ const BiologicalTentacleSystem = () => {
     return <group ref={groupRef} />;
 };
 
-const FireMaterial = {
-  uniforms: {
-    uTime: { value: 0 },
-    uColor: { value: new THREE.Color(1.0, 0.5, 0.0) },
-  },
-  vertexShader: `
-    uniform float uTime;
-    attribute float aOffset;
-    attribute float aSpeed;
-    varying float vAlpha;
-    
-    void main() {
-      vec3 pos = position;
-      float height = 15.0; 
-      float y = mod(pos.y + uTime * aSpeed + aOffset, height);
-      pos.y = y;
-      pos.x += sin(uTime * 2.0 + aOffset + y * 0.2) * (0.5 + y * 0.1);
-      pos.z += cos(uTime * 1.5 + aOffset + y * 0.2) * (0.5 + y * 0.1);
-
-      vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-      gl_Position = projectionMatrix * mvPosition;
-      gl_PointSize = 200.0 / -mvPosition.z; 
-      
-      vAlpha = 1.0 - pow(y / height, 2.0); 
-      if(vAlpha < 0.0) vAlpha = 0.0;
-    }
-  `,
-  fragmentShader: `
-    uniform vec3 uColor;
-    varying float vAlpha;
-    
-    void main() {
-      vec2 coord = gl_PointCoord - vec2(0.5);
-      float dist = length(coord);
-      if(dist > 0.5) discard;
-      float glow = 1.0 - (dist * 2.0);
-      gl_FragColor = vec4(uColor, vAlpha * glow);
-    }
-  `
-};
-
 const HyperSpireAltar = () => {
     const groupRef = useRef<THREE.Group>(null);
     const baseColor = PLANET_CONFIG.altarColor;
@@ -1155,7 +1406,6 @@ const HyperSpireAltar = () => {
       <PointsObj geometry={new THREE.CylinderGeometry(10, 15, 4, 100, 10)} position={[0, 2, 0]} color="#440055" size={0.06} />
       <PointsObj geometry={new THREE.CylinderGeometry(8, 10, 2, 100, 5)} position={[0, 5, 0]} color="#660077" size={0.05} />
       <PointsObj geometry={new THREE.CylinderGeometry(4, 8, 30, 64, 50, true)} position={[0, 15, 0]} color="#8800ff" size={0.04} opacity={0.6} />
-      
       <PointsObj geometry={new THREE.CylinderGeometry(1, 1, 80, 24, 150, true)} position={[0, 40, 0]} color={baseColor} size={0.06} opacity={0.9} />
       <PointsObj geometry={new THREE.CylinderGeometry(0.2, 0.2, 80, 12, 50, true)} position={[0, 40, 0]} color="#ffffff" size={0.08} opacity={1} />
 
@@ -1316,57 +1566,6 @@ const HyperBurningDebris = () => {
     )
 }
 
-const ShaderFire = ({ position, color, count = 400, height = 10, width = 3, speedMult = 1 }: any) => {
-    const meshRef = useRef<THREE.Points>(null);
-    const [geoAttributes] = useState(() => {
-        const pos = new Float32Array(count * 3);
-        const offsets = new Float32Array(count);
-        const speeds = new Float32Array(count);
-        for(let i=0; i<count; i++) {
-            pos[i*3] = (Math.random() - 0.5) * width;
-            pos[i*3+1] = Math.random() * height; 
-            pos[i*3+2] = (Math.random() - 0.5) * width;
-            offsets[i] = Math.random() * 10;
-            speeds[i] = (1.0 + Math.random()) * speedMult;
-        }
-        return { pos, offsets, speeds };
-    });
-
-    useFrame((state) => {
-        if(meshRef.current) {
-            const material = meshRef.current.material as THREE.ShaderMaterial;
-            material.uniforms.uTime.value = state.clock.getElapsedTime();
-        }
-    });
-
-    return (
-        <points position={position} ref={meshRef}>
-            <bufferGeometry>
-                <bufferAttribute attach="attributes-position" count={count} array={geoAttributes.pos} itemSize={3} />
-                <bufferAttribute attach="attributes-aOffset" count={count} array={geoAttributes.offsets} itemSize={1} />
-                <bufferAttribute attach="attributes-aSpeed" count={count} array={geoAttributes.speeds} itemSize={1} />
-            </bufferGeometry>
-            <shaderMaterial 
-                vertexShader={FireMaterial.vertexShader}
-                fragmentShader={FireMaterial.fragmentShader}
-                uniforms={{ uTime: { value: 0 }, uColor: { value: color } }}
-                transparent
-                blending={THREE.AdditiveBlending}
-                depthWrite={false}
-            />
-        </points>
-    )
-}
-
-const PointsObj = ({ geometry, position, rotation, color, size, opacity = 1 }: any) => {
-    return (
-        <points position={position} rotation={rotation}>
-            <primitive object={geometry} attach="geometry" />
-            <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={opacity} />
-        </points>
-    );
-};
-
 export default WorldEnvironment;
     </script>
 
@@ -1379,20 +1578,10 @@ import Player from 'Player';
 import WorldEnvironment from 'WorldEnvironment';
 import * as THREE from 'three';
 
-// --- [可修改] 文字標籤設定 ---
 export const LABEL_DATA = [
-    { 
-      text: "Exhibition", 
-      position: [0, 30, -110] 
-    }, 
-    { 
-      text: "CV", 
-      position: [-30, 27, -105] 
-    },       
-    { 
-      text: "Things", 
-      position: [30, 27, -105] 
-    }     
+    { text: "Exhibition", position: [0, 30, -110] }, 
+    { text: "CV", position: [-30, 27, -105] },       
+    { text: "Things", position: [30, 27, -105] }     
 ];
 
 interface SceneProps {
@@ -1406,14 +1595,10 @@ const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
       <ambientLight intensity={0.2} />
       <pointLight position={[10, 10, 10]} intensity={0.5} color="#00ffff" />
       <pointLight position={[-10, 15, -10]} intensity={0.5} color="#ff00ff" />
-      
       <fog attach="fog" args={['#050505', 150, 1500]} />
-
       <Player onTrigger={onTrigger} isLocked={isLocked} />
       <WorldEnvironment />
-      
       <ChromeLabelSystem />
-
       <DreiEnv preset="night" />
     </>
   );
@@ -1421,7 +1606,6 @@ const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
 
 const ChromeLabelSystem = () => {
     const { scene } = useThree();
-
     return (
         <group>
             {LABEL_DATA.map((l, i) => (
@@ -1437,19 +1621,15 @@ const ChromeLabel = ({ text, position, scene }: { text: string, position: [numbe
 
     useFrame((state) => {
         if (!ref.current) return;
-        
         const player = scene.getObjectByName('PlayerGroup');
         if (player) {
             const labelPos = new THREE.Vector3(...position);
             const flatPlayerPos = new THREE.Vector3(player.position.x, 0, player.position.z);
             const flatLabelPos = new THREE.Vector3(labelPos.x, 0, labelPos.z);
-            
             const dist = flatPlayerPos.distanceTo(flatLabelPos);
-            
             const targetOpacity = THREE.MathUtils.clamp(1 - (dist - 30) / 30, 0, 1);
             setOpacity(THREE.MathUtils.lerp(opacity, targetOpacity, 0.1));
         }
-
         ref.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 1.5) * 0.5;
         ref.current.lookAt(state.camera.position);
     });
@@ -1502,10 +1682,8 @@ export default function App() {
 
   const handleTrigger = (url: string) => {
     if (isFading) return;
-    console.log("Triggered redirect to:", url);
     setRedirectUrl(url);
     setIsFading(true);
-    
     setTimeout(() => {
       window.location.href = url;
     }, 2000);
@@ -1514,7 +1692,7 @@ export default function App() {
   return (
     <div className="app-container">
       <Canvas
-        camera={{ position: [0, 15, 80], fov: 50 }}
+        camera={{ position: [0, 15, 30], fov: 50 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: false }}
       >
@@ -1523,8 +1701,6 @@ export default function App() {
           <Scene onTrigger={handleTrigger} isLocked={isFading} />
           <Stars radius={100} depth={50} count={6000} factor={4} saturation={1} fade speed={2} />
         </Suspense>
-        {/* --- [可修改] 相機控制 --- */}
-        {/* enableZoom: 允許縮放, enableRotate: 允許旋轉 */}
         <OrbitControls makeDefault enableZoom={true} enablePan={false} /> 
       </Canvas>
       <UIOverlay isFading={isFading} />
