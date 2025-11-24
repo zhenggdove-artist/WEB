@@ -439,9 +439,9 @@ const DinoBreath = ({ breathStatus, jawRef }: { breathStatus: any, jawRef: React
     const [state, setState] = useState<'IDLE' | 'WINDUP' | 'FIRING' | 'FADE'>('IDLE');
     
     // [可修改] 噴火節奏設定
-    const WINDUP_DURATION = 0.2;               // 噴火前張嘴時間
-    const FIRE_DURATION = 0.5;                // 持續噴射時間
-    const FADE_DURATION = 0.25;               // 火焰消散時間
+    const WINDUP_DURATION = 0.1;               // 噴火前張嘴時間
+    const FIRE_DURATION = 0.001;                // 持續噴射時間
+    const FADE_DURATION = 0.001;               // 火焰消散時間
     const TRIGGER_GAP_BASE = 4.5;             // 噴火間隔基準秒數
     const TRIGGER_GAP_RAND = 1.5;             // 噴火間隔隨機加成
 
