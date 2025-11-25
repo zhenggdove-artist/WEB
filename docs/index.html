@@ -218,6 +218,7 @@ import { Vector3, Group, MathUtils, BoxGeometry, SphereGeometry, CylinderGeometr
 import { useInput } from 'useInput';
 import { joystickState, fireButtonState } from 'UIOverlay';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import { playerFireState } from 'playerState';
 import * as THREE from 'three';
 
 // --- [可修改] 恐龍火焰噴射長度與設定 ---
@@ -258,6 +259,10 @@ const MOUTH_CONFIG = {
 const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
   return pos.distanceTo(target) < range;
 };
+
+// --- 火焰設定（可調整） ---
+const FIRE_HIT_RADIUS = 2.4; // 火焰碰撞半徑（向下擴大以碰到小雞）
+const FIRE_VISUAL_LENGTH = 6; // 火焰視覺長度
 
 // --- 火焰設定（可調整） ---
 const FIRE_HIT_RADIUS = 2.4; // 火焰碰撞半徑（向下擴大以碰到小雞）
@@ -304,6 +309,32 @@ const ThreeToedClaw = ({ position, rotation, scale = 1, color }: any) => {
         </group>
     )
 }
+
+// 碰撞閃紅光暈
+const FlashAura = () => {
+    return (
+      <points>
+        <sphereGeometry args={[3.0, 16, 16]} />
+        <pointsMaterial size={0.18} color="#ff3333" transparent opacity={0.6} />
+      </points>
+    );
+};
+
+// 簡易火焰點雲
+const FireBreath = ({ fireRef }: { fireRef: React.RefObject<Group | null> }) => {
+  return (
+    <group ref={fireRef} visible={false}>
+      <points>
+        <coneGeometry args={[0.9, FIRE_VISUAL_LENGTH, 16, 4, true]} />
+        <pointsMaterial size={0.12} color="#ff6b35" transparent opacity={0.65} />
+      </points>
+      <points position={[0, 0, FIRE_VISUAL_LENGTH * 0.35]}>
+        <coneGeometry args={[0.6, FIRE_VISUAL_LENGTH * 0.55, 12, 4, true]} />
+        <pointsMaterial size={0.1} color="#ffd166" transparent opacity={0.55} />
+      </points>
+    </group>
+  );
+};
 
 const BlinkingEyes = ({ position }: { position: [number, number, number] }) => {
     const leftEye = useRef<Group>(null);
@@ -684,7 +715,7 @@ const TRexModel: React.FC<any> = ({
   );
 };
 
-const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
+const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
   const groupRef = useRef<Group>(null);
   const leftLegRef = useRef<Group>(null);
   const rightLegRef = useRef<Group>(null);
@@ -695,6 +726,9 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const tailBaseRef = useRef<Group>(null);
   const tailMidRef = useRef<Group>(null);
   const tailTipRef = useRef<Group>(null);
+  const fireRef = useRef<Group>(null);
+  const tmpForward = useRef(new Vector3(0, 0, -1));
+  const mouthWorld = useRef(new Vector3());
 
   const { input } = useInput();
   const { camera, controls } = useThree();
@@ -827,6 +861,28 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     }
     prevPosition.current.copy(position);
 
+    // Fire control (keyboard fire + 浮動火焰按鈕)
+    const firing = (input.fire || fireButtonState.pressed) && !isLocked;
+    // 口部世界座標（簡化估計）
+    tmpForward.current.set(0, 0, -1).applyQuaternion(groupRef.current.quaternion).normalize();
+    mouthWorld.current.copy(groupRef.current.position).add(new Vector3(0, 4.0, 2.2).applyQuaternion(groupRef.current.quaternion));
+    const fireTargets = [
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 1.5),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 3),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 2).add(new Vector3(0, -2, 0)),
+    ];
+    playerFireState.active = firing;
+    playerFireState.centers = fireTargets;
+    playerFireState.radius = FIRE_HIT_RADIUS;
+
+    if (fireRef.current) {
+      fireRef.current.visible = firing;
+      fireRef.current.position.copy(mouthWorld.current);
+      const lookTarget = mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH);
+      fireRef.current.lookAt(lookTarget);
+    }
+
     if (checkTrigger(position, altarPos, 12)) {
       onTrigger("https://www.zhenggdove.com/exhibition");
     }
@@ -840,6 +896,8 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
 
   return (
     <group ref={groupRef} name="PlayerGroup">
+      {hitFlash && <FlashAura />}
+      <FireBreath fireRef={fireRef} />
       <TRexModel 
         leftLegRef={leftLegRef} 
         rightLegRef={rightLegRef}
@@ -1674,7 +1732,7 @@ const createInitialChicks = (): Chick[] => {
   }));
 };
 
-const Chickens: React.FC = () => {
+const Chickens: React.FC<{ onPlayerHit?: () => void }> = ({ onPlayerHit }) => {
   const { scene } = useThree();
   const chickens = useRef<Chick[]>(createInitialChicks());
 
@@ -1708,8 +1766,10 @@ const Chickens: React.FC = () => {
         c.pos.z = THREE.MathUtils.clamp(c.pos.z, AREA_Z_MIN, AREA_Z_MAX);
         c.pos.y = BASE_HEIGHT + Math.sin(state.clock.getElapsedTime() * HOP_SPEED + c.hopOff) * HOP_HEIGHT;
         if (dist < HIT_RADIUS) {
-          // Player hit flash: emit event on scene (simple console)
-          console.log('Player hit by chicken');
+          if (onPlayerHit) onPlayerHit();
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            try { navigator.vibrate(120); } catch (e) {}
+          }
         }
         if (playerFireState.active) {
           for (const center of playerFireState.centers) {
@@ -1823,15 +1883,21 @@ interface SceneProps {
 }
 
 const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
+  const [hitFlash, setHitFlash] = useState(false);
+
+  const handlePlayerHit = () => {
+    setHitFlash(true);
+    setTimeout(() => setHitFlash(false), 200);
+  };
   return (
     <>
       <ambientLight intensity={0.2} />
       <pointLight position={[10, 10, 10]} intensity={0.5} color="#00ffff" />
       <pointLight position={[-10, 15, -10]} intensity={0.5} color="#ff00ff" />
       <fog attach="fog" args={['#050505', 150, 1500]} />
-      <Player onTrigger={onTrigger} isLocked={isLocked} />
+      <Player onTrigger={onTrigger} isLocked={isLocked} hitFlash={hitFlash} />
       {/* 小雞點雲群組：固定平台中心，彈跳/遊走/追擊 */}
-      <Chickens />
+      <Chickens onPlayerHit={handlePlayerHit} />
       <WorldEnvironment />
       <ChromeLabelSystem />
       <DreiEnv preset="night" />
