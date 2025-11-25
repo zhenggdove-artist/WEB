@@ -1606,19 +1606,20 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { playerFireState } from 'playerState';
 
-// --- 小雞可調參數（中文標註） ---
-const CHICKEN_COUNT = 5; // 小雞數量
-const BASE_HEIGHT = 8.5; // 基準高度（平台上方）
-const AREA_X = 30;       // 活動範圍 X 半徑
-const AREA_Z_MIN = -90;  // 活動範圍 Z 最小
-const AREA_Z_MAX = -55;  // 活動範圍 Z 最大
-const WANDER_SPEED = 1.2; // 遊走速度
-const CHASE_SPEED = 2.3;  // 追擊速度
-const ALERT_RADIUS = 16;  // 警戒半徑（眼睛轉紅並追擊）
-const HIT_RADIUS = 2.2;   // 撞擊主角半徑
-const HOP_HEIGHT = 0.6;   // 彈跳高度
-const HOP_SPEED = 5.0;    // 彈跳頻率
-const DRUMSTICK_DURATION = 5; // 雞腿停留秒數（逐漸消失）
+// --- 小雞可調參數（中文標註，您可在此修改行為/尺寸/數量/速度/警戒區域） ---
+const CHICKEN_COUNT = 5;       // 小雞數量
+const BASE_HEIGHT = 8.5;       // 基準高度（平台上方）
+const AREA_X = 30;             // 活動範圍 X 半徑
+const AREA_Z_MIN = -90;        // 活動範圍 Z 最小
+const AREA_Z_MAX = -55;        // 活動範圍 Z 最大
+const WANDER_SPEED = 2.2;      // 遊走速度（加快）
+const CHASE_SPEED = 3.2;       // 追擊速度（加快）
+const ALERT_RADIUS = 18;       // 警戒半徑（眼睛轉紅並追擊）
+const HIT_RADIUS = 2.2;        // 撞擊主角半徑
+const HOP_HEIGHT = 0.6;        // 彈跳高度
+const HOP_SPEED = 5.0;         // 彈跳頻率
+const DRUMSTICK_DURATION = 5;  // 雞腿停留秒數（逐漸消失）
+const CHICKEN_SCALE = 0.9;     // 小雞整體縮放（原本 3，現在縮小為 30% 的 0.9）
 
 type Mode = 'wander' | 'chase' | 'drumstick';
 interface Chick {
@@ -1633,12 +1634,13 @@ interface Chick {
   opacity: number;
 }
 
-const startXs = [-12, -6, 0, 6, 12];
-const startZ = -75;
-
 const createInitialChicks = (): Chick[] => {
-  return Array.from({ length: CHICKEN_COUNT }).map((_, i) => ({
-    pos: new THREE.Vector3(startXs[i % startXs.length], BASE_HEIGHT, startZ + (Math.random() - 0.5) * 6),
+  return Array.from({ length: CHICKEN_COUNT }).map(() => ({
+    pos: new THREE.Vector3(
+      (Math.random() - 0.5) * AREA_X * 1.6,
+      BASE_HEIGHT,
+      THREE.MathUtils.lerp(AREA_Z_MIN, AREA_Z_MAX, Math.random())
+    ),
     vel: new THREE.Vector3(),
     dir: Math.random() * Math.PI * 2,
     timer: 1 + Math.random() * 1.5,
@@ -1736,28 +1738,29 @@ const ChickenModel = ({ data, index }: { data: React.MutableRefObject<Chick[]>; 
   });
 
   return (
-    <group ref={ref} frustumCulled={false} scale={[3, 3, 3]}>
+    <group ref={ref} frustumCulled={false} scale={[CHICKEN_SCALE, CHICKEN_SCALE, CHICKEN_SCALE]}>
       <group ref={live}>
-        <PointsShape geometry={new THREE.BoxGeometry(1.4, 1.2, 1.2, 8, 8, 8)} position={[0, 0.8, 0]} color="#ffffdd" size={0.32} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.9, 0.8, 0.9, 6, 6, 6)} position={[0, 1.7, 0.4]} color="#fff7cc" size={0.32} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.4, 0.2, 1.0, 3, 1, 6)} position={[0, 1.2, -0.6]} color="#ffeedd" size={0.28} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[0.85, 1.0, -0.1]} rotation={[0, 0, -0.4]} color="#fff1dd" size={0.28} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[-0.85, 1.0, -0.1]} rotation={[0, 0, 0.4]} color="#fff1dd" size={0.28} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[0.35, 0.2, -0.05]} color="#ffae52" size={0.28} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[-0.35, 0.2, -0.05]} color="#ffae52" size={0.28} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[0.35, -0.2, 0.05]} color="#ffae52" size={0.28} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[-0.35, -0.2, 0.05]} color="#ffae52" size={0.28} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.ConeGeometry(0.2, 0.5, 3)} position={[0, 1.6, 1.0]} rotation={[Math.PI / 2, 0, 0]} color="#ffb347" size={0.32} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[0.25, 1.75, 0.55]} color="#111111" size={0.32} materialRef={leftEyeMat} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[-0.25, 1.75, 0.55]} color="#111111" size={0.32} materialRef={rightEyeMat} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.15, 6, 6)} position={[0, 2.05, 0.2]} color="#ff4466" size={0.3} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[0.15, 2.0, 0.0]} color="#ff4466" size={0.3} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[-0.15, 2.0, 0.0]} color="#ff4466" size={0.3} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(1.4, 1.2, 1.2, 16, 16, 16)} position={[0, 0.8, 0]} color="#ffffdd" size={0.14} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.9, 0.8, 0.9, 14, 14, 14)} position={[0, 1.7, 0.4]} color="#fff7cc" size={0.14} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.4, 0.2, 1.0, 10, 6, 14)} position={[0, 1.2, -0.6]} color="#ffeedd" size={0.12} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 10, 8, 6)} position={[0.85, 1.0, -0.1]} rotation={[0, 0, -0.4]} color="#fff1dd" size={0.12} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 10, 8, 6)} position={[-0.85, 1.0, -0.1]} rotation={[0, 0, 0.4]} color="#fff1dd" size={0.12} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 12, 3)} position={[0.35, 0.2, -0.05]} color="#ffae52" size={0.12} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 12, 3)} position={[-0.35, 0.2, -0.05]} color="#ffae52" size={0.12} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 6, 4, 6)} position={[0.35, -0.2, 0.05]} color="#ffae52" size={0.12} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 6, 4, 6)} position={[-0.35, -0.2, 0.05]} color="#ffae52" size={0.12} sizeAttenuation={false} depthTest={false} />
+        {/* 黃色鑽石形嘴巴（Octahedron 模擬鑽石） */}
+        <PointsShape geometry={new THREE.OctahedronGeometry(0.18, 1)} position={[0, 1.55, 0.9]} color="#ffd54f" size={0.14} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.08, 12, 12)} position={[0.25, 1.75, 0.55]} color="#111111" size={0.12} materialRef={leftEyeMat} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.08, 12, 12)} position={[-0.25, 1.75, 0.55]} color="#111111" size={0.12} materialRef={rightEyeMat} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.15, 10, 10)} position={[0, 2.05, 0.2]} color="#ff4466" size={0.12} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.13, 10, 10)} position={[0.15, 2.0, 0.0]} color="#ff4466" size={0.12} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.13, 10, 10)} position={[-0.15, 2.0, 0.0]} color="#ff4466" size={0.12} sizeAttenuation={false} depthTest={false} />
       </group>
       <group ref={drum} visible={false}>
-        <PointsShape geometry={new THREE.SphereGeometry(0.9, 12, 12)} position={[0, 0.2, 0]} scale={[1.4, 0.8, 1.0]} color="#c47a2c" size={0.32} opacity={1} materialRef={drumMat} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 8, 1)} position={[0, 0.9, 0]} color="#ffffff" size={0.32} opacity={1} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.18, 8, 8)} position={[0, 1.35, 0]} color="#ffffff" size={0.32} opacity={1} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.9, 16, 16)} position={[0, 0.2, 0]} scale={[1.4, 0.8, 1.0]} color="#c47a2c" size={0.14} opacity={1} materialRef={drumMat} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 12, 3)} position={[0, 0.9, 0]} color="#ffffff" size={0.14} opacity={1} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.18, 12, 12)} position={[0, 1.35, 0]} color="#ffffff" size={0.14} opacity={1} sizeAttenuation={false} depthTest={false} />
       </group>
       <pointLight position={[0, 2.5, 0]} intensity={6} distance={25} color="#ffeeaa" />
     </group>
