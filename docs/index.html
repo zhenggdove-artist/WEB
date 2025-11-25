@@ -172,8 +172,9 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
     joystickState.y = -(dy / maxDist); 
   };
 
-  const handleFireToggle = (e: React.MouseEvent | React.TouchEvent) => {
+  const handleFireToggle = (e: React.MouseEvent | React.TouchEvent | React.PointerEvent) => {
     e.preventDefault();
+    if (e.stopPropagation) e.stopPropagation();
     fireButtonState.pressed = !fireButtonState.pressed;
   };
 
@@ -200,8 +201,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
 
       <button 
         className="fire-button"
-        onClick={handleFireToggle}
-        onTouchStart={handleFireToggle}
+        onPointerDown={handleFireToggle}
         aria-label="Fire"
       />
     </>
