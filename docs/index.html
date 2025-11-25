@@ -117,6 +117,7 @@ interface UIOverlayProps {
   isFading: boolean;
 }
 
+// 全域控制：搖桿與火焰按鈕
 export const joystickState = { x: 0, y: 0 };
 export const fireButtonState = { pressed: false };
 
@@ -130,13 +131,9 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
     setTouching(true);
     updateJoystick(e.touches[0]);
   };
-
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (touching) {
-      updateJoystick(e.touches[0]);
-    }
+    if (touching) updateJoystick(e.touches[0]);
   };
-
   const handleTouchEnd = () => {
     setTouching(false);
     setPos({ x: 0, y: 0 });
@@ -160,7 +157,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
     }
     setPos({ x: dx, y: dy });
     joystickState.x = dx / maxDist;
-    joystickState.y = -(dy / maxDist); 
+    joystickState.y = -(dy / maxDist);
   };
 
   const handleFireDown = (e: React.MouseEvent | React.TouchEvent) => {
@@ -175,14 +172,14 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
   return (
     <>
       <div className={`overlay-fade ${isFading ? 'active' : ''}`} />
-      <div 
+      <div
         className="joystick-wrapper"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         <div ref={baseRef} className="joystick-base">
-          <div 
+          <div
             ref={stickRef}
             className="joystick-stick"
             style={{
@@ -193,7 +190,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
         </div>
       </div>
 
-      <button 
+      <button
         className="fire-button"
         onMouseDown={handleFireDown}
         onMouseUp={handleFireUp}
