@@ -9,6 +9,85 @@
     <!-- Load Babel for in-browser compilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <style>
+      body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #050011; }
+      #root { width: 100%; height: 100%; }
+      
+      .app-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background-color: #000000;
+      }
+
+      /* Overlay Fade Effect */
+      .overlay-fade {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none;
+        background-color: #000000;
+        z-index: 50;
+        transition: opacity 2000ms ease-in-out;
+        opacity: 0;
+      }
+      .overlay-fade.active {
+        opacity: 1;
+      }
+
+      /* Joystick Controls */
+      .joystick-wrapper {
+        position: absolute;
+        bottom: 48px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 40;
+        user-select: none;
+        -webkit-user-select: none;
+        display: block;
+      }
+      @media (min-width: 768px) {
+        .joystick-wrapper {
+          display: none;
+        }
+      }
+
+      .joystick-base {
+        width: 128px;
+        height: 128px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        background-color: rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .joystick-stick {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background-color: rgba(34, 211, 238, 0.5);
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.8);
+        border: 1px solid rgb(165, 243, 252);
+      }
+      
+      /* Loading Screen */
+      #loader {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        color: #00ffff;
+        font-family: monospace;
+        font-size: 16px;
+        z-index: 100;
+        background: rgba(0,0,0,0.8);
+        padding: 20px;
+        border: 1px solid #00ffff;
+        border-radius: 8px;
+      }
+    </style>
+    
     <!-- Import Map -->
     <script type="importmap">
 {
@@ -25,7 +104,7 @@
   }
 }
 </script>
-  <link rel="stylesheet" crossorigin href="./index.css">
+<link rel="stylesheet" href="./index.css">
 </head>
   <body>
     <div id="root"></div>
@@ -118,7 +197,6 @@ interface UIOverlayProps {
 }
 
 export const joystickState = { x: 0, y: 0 };
-export const fireButtonState = { pressed: false };
 
 const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
   const stickRef = useRef<HTMLDivElement>(null);
@@ -149,23 +227,22 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
     const baseRect = baseRef.current.getBoundingClientRect();
     const centerX = baseRect.left + baseRect.width / 2;
     const centerY = baseRect.top + baseRect.height / 2;
+
     const maxDist = baseRect.width / 2;
+
     let dx = touch.clientX - centerX;
     let dy = touch.clientY - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
+
     if (distance > maxDist) {
       const angle = Math.atan2(dy, dx);
       dx = Math.cos(angle) * maxDist;
       dy = Math.sin(angle) * maxDist;
     }
+
     setPos({ x: dx, y: dy });
     joystickState.x = dx / maxDist;
     joystickState.y = -(dy / maxDist); 
-  };
-
-  const handleFireToggle = (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    fireButtonState.pressed = !fireButtonState.pressed;
   };
 
   return (
@@ -188,13 +265,6 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
           />
         </div>
       </div>
-
-      <button 
-        className="fire-button"
-        onMouseDown={handleFireToggle}
-        onTouchStart={handleFireToggle}
-        aria-label="Fire"
-      />
     </>
   );
 };
@@ -207,16 +277,15 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Group, MathUtils, BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry } from 'three';
 import { useInput } from 'useInput';
-import { joystickState, fireButtonState } from 'UIOverlay';
+import { joystickState } from 'UIOverlay';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { playerFireState } from 'playerState';
 import * as THREE from 'three';
 
 // --- [可修改] 恐龍火焰噴射長度與設定 ---
 const BREATH_CONFIG = {
-    length: 12.0,       // 火焰噴射的最大距離 (長度)
+    length: 6.0,       // 火焰噴射的最大距離 (長度)
     speed: 90,        // 火焰粒子的飛行速度 (提高以加快水平噴射)
-    spread: 3,        // 火焰擴散的寬度 (錐形角度)
+    spread: 1.3,        // 火焰擴散的寬度 (錐形角度)
     particleSize: 0.1,  // 每個火焰點的大小
     offset: { x: 0, y: 1, z: 1.2 } // 發射點相對於下顎的位置
 };
@@ -240,9 +309,9 @@ const FIRE_COLORS = ['#0015c7', '#fa7c00', '#f30eea'];
 const MOUTH_CONFIG = {
     openSpeed: 0.7,
     closeSpeed: 0.5,
-    fireOpen: 1.2,          // 噴火時下顎張開幅度（手動火焰專用）
+    fireOpen: 0.9,
     roarOpen: 0.3,
-    upperFireOpen: -0.2,    // 噴火時上顎角度（較小開啟）
+    upperFireOpen: -0.35,
     upperRoarOpen: -0.12,
 };
 // --- HELPER COMPONENTS (Topological Order for Reference) ---
@@ -250,10 +319,6 @@ const MOUTH_CONFIG = {
 const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
   return pos.distanceTo(target) < range;
 };
-
-// --- 火焰設定（可調整） ---
-const FIRE_HIT_RADIUS = 4; // 火焰碰撞半徑（向下擴大以碰到小雞）
-const FIRE_VISUAL_LENGTH = 12; // 火焰視覺長度
 
 const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity = 1 }: any) => {
     return (
@@ -297,17 +362,6 @@ const ThreeToedClaw = ({ position, rotation, scale = 1, color }: any) => {
     )
 }
 
-// 碰撞閃紅光暈
-const FlashAura = () => {
-    return (
-      <points>
-        <sphereGeometry args={[3.0, 16, 16]} />
-        <pointsMaterial size={0.18} color="#ff3333" transparent opacity={0.6} />
-      </points>
-    );
-};
-
-// 簡易火焰點雲
 const BlinkingEyes = ({ position }: { position: [number, number, number] }) => {
     const leftEye = useRef<Group>(null);
     const rightEye = useRef<Group>(null);
@@ -452,16 +506,6 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
 
     useFrame((rState, delta) => {
         const time = rState.clock.getElapsedTime();
-
-        // 手動火焰：按鈕/鍵時立即保持 FIRING 狀態
-        if (breathStatus.current.manualFire) {
-            if (state !== 'FIRING') setState('FIRING');
-            progress.current = 1.0;
-            fadeRef.current = 1.0;
-            breathStatus.current.isFiring = true;
-            breathStatus.current.isMouthOpen = true;
-            breathStatus.current.isRoaring = false;
-        }
         
         // --- ANIMATION STATE MACHINE ---
         switch (state) {
@@ -473,13 +517,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 fadeRef.current = 0;
                 fireHoldRef.current = 0;
                 firePlanRef.current = false;
-                if (breathStatus.current.manualFire) {
-                    firePlanRef.current = true;
-                    setState('PRE_FIRE');
-                    timerRef.current = 0;
-                    fireTimerRef.current = 0;
-                    fireHoldRef.current = 0;
-                } else if (time > nextTriggerTime.current) {
+                if (time > nextTriggerTime.current) {
                     firePlanRef.current = Math.random() < BREATH_TIMING.fireProbability;
                     setState('PRE_FIRE');
                     timerRef.current = 0; // Reset local timer
@@ -489,15 +527,15 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 break;
 
             case 'PRE_FIRE':
+                // Open jaw BEFORE firing
                 breathStatus.current.isMouthOpen = true; 
                 breathStatus.current.isFiring = false; 
                 breathStatus.current.isRoaring = !firePlanRef.current;
                 timerRef.current += delta;
-                const preDelay = breathStatus.current.manualFire ? FIRE_MOUTH_DELAY : BREATH_TIMING.preFireDelay;
-                if (timerRef.current > preDelay) {
-                    if (firePlanRef.current || breathStatus.current.manualFire) {
+                if (timerRef.current > BREATH_TIMING.preFireDelay) { // Wait preFireDelay seconds
+                    if (firePlanRef.current) {
                         setState('FIRING');
-                        progress.current = 0.0;
+                        progress.current = 0.0; // CRITICAL RESET: Start animation from 0
                         fireHoldRef.current = 0;
                         fireTimerRef.current = 0;
                         fadeRef.current = 1;
@@ -526,18 +564,18 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 breathStatus.current.isRoaring = false;
                 fireTimerRef.current += delta;
                 // Animate progress 0 -> 1 (Shooting out)
-                progress.current = Math.min(1.0, progress.current + delta * BREATH_TIMING.fireGrowSpeed);
-                if (!breathStatus.current.manualFire) {
-                    if (progress.current >= 1.0) {
-                        fireHoldRef.current += delta;
-                        if (fireHoldRef.current >= BREATH_TIMING.fireDuration || fireTimerRef.current >= 1.0) {
-                            timerRef.current = 0;
-                            setState('FADING');
-                        }
+                progress.current += delta * BREATH_TIMING.fireGrowSpeed; 
+                if (progress.current >= 1.0) {
+                    progress.current = 1.0;
+                    fireHoldRef.current += delta;
+                    if (fireHoldRef.current >= BREATH_TIMING.fireDuration || fireTimerRef.current >= 1.0) {
+                        timerRef.current = 0;
+                        setState('FADING');
                     }
-                    if (fireTimerRef.current >= 1.0) {
-                        fireHoldRef.current = 0;
-                    }
+                }
+                // Hard cap total fire time
+                if (fireTimerRef.current >= 1.0) {
+                    fireHoldRef.current = 0;
                 }
                 break;
 
@@ -554,13 +592,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 if (fireTimerRef.current >= 1.0) {
                     fadeRef.current = 0;
                 }
-                if (breathStatus.current.manualFire) {
-                    setState('FIRING');
-                    progress.current = 1.0;
-                    fadeRef.current = 1.0;
-                    fireTimerRef.current = 0;
-                    timerRef.current = 0;
-                } else if (fadeRef.current <= 0.01) {
+                if (fadeRef.current <= 0.01) {
                     breathStatus.current.isFiring = false;
                     breathStatus.current.isMouthOpen = false;
                     breathStatus.current.isRoaring = false;
@@ -580,10 +612,11 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             const currentScale = state === 'FADING' ? 1 : progress.current;
             mat.uniforms.uFireScale.value = currentScale;
             mat.uniforms.uFade.value = fadeRef.current;
-            // 手動時固定往下 45 度，其餘依口型對齊
+            // Counter jaw rotation to keep flame horizontal
             const mouthAngle = breathStatus.current.mouthAngle || 0;
-            meshRef.current.rotation.x = breathStatus.current.manualFire ? -Math.PI * 0.25 : -mouthAngle;
-            meshRef.current.visible = ((state === 'FIRING' || state === 'FADING') || breathStatus.current.manualFire) && fadeRef.current > 0.01; 
+            meshRef.current.rotation.x = -mouthAngle;
+            // Hide mesh if idle or faded
+            meshRef.current.visible = (state === 'FIRING' || state === 'FADING') && fadeRef.current > 0.01; 
         }
     });
 
@@ -609,10 +642,10 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
 
 const TRexModel: React.FC<any> = ({ 
     leftLegRef, rightLegRef, leftArmRef, rightArmRef, jawRef, upperJawRef,
-    tailBaseRef, tailMidRef, tailTipRef, breathStatus, hitFlash 
+    tailBaseRef, tailMidRef, tailTipRef, breathStatus 
 }) => {
-  const skinColor = hitFlash ? "#ff3333" : "#00ff66"; 
-  const detailColor = hitFlash ? "#ff6666" : "#00cc44";
+  const skinColor = "#00ff66"; 
+  const detailColor = "#00cc44";
   const clawColor = "#ccffcc";
   const teethColor = "#ffffff";
   const tongueColor = "#ff0044";
@@ -622,7 +655,7 @@ const TRexModel: React.FC<any> = ({
     size: 0.05, 
     sizeAttenuation: true,
     transparent: true,
-    opacity: 0.9, // 碰撞時暫時隱藏綠色點
+    opacity: 0.9,
   };
 
   return (
@@ -708,7 +741,7 @@ const TRexModel: React.FC<any> = ({
   );
 };
 
-const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
+const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const groupRef = useRef<Group>(null);
   const leftLegRef = useRef<Group>(null);
   const rightLegRef = useRef<Group>(null);
@@ -719,16 +752,13 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
   const tailBaseRef = useRef<Group>(null);
   const tailMidRef = useRef<Group>(null);
   const tailTipRef = useRef<Group>(null);
-  const tmpForward = useRef(new Vector3(0, 0, -1));
-  const mouthWorld = useRef(new Vector3());
-  const hitFlashTimer = useRef<NodeJS.Timeout | null>(null);
 
   const { input } = useInput();
   const { camera, controls } = useThree();
   const [position] = useState(new Vector3(0, 0, 10)); 
 
   // --- Breath Status Ref (Shared between Player and DinoBreath) ---
-  const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0, isRoaring: false, manualFire: false });
+  const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0, isRoaring: false });
 
   // --- [可修改] 恐龍移動速度 (Speed) ---
   const speed = 2.0;
@@ -744,9 +774,6 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
 
   useFrame((state) => {
     if (!groupRef.current || isLocked) return;
-
-    // 手動火焰按鍵/按鈕
-    breathStatus.current.manualFire = (input.fire || fireButtonState.pressed) && !isLocked;
 
     let moveForward = 0;
     let moveTurn = 0;
@@ -857,21 +884,6 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
     }
     prevPosition.current.copy(position);
 
-    // Fire control (keyboard fire + 浮動火焰按鈕)
-    const firing = (input.fire || fireButtonState.pressed) && !isLocked;
-    // 口部世界座標（簡化估計）
-    tmpForward.current.set(0, 0, -1).applyQuaternion(groupRef.current.quaternion).normalize();
-    mouthWorld.current.copy(groupRef.current.position).add(new Vector3(0, 4.0, 2.2).applyQuaternion(groupRef.current.quaternion));
-    const fireTargets = [
-      mouthWorld.current.clone().addScaledVector(tmpForward.current, 1.5),
-      mouthWorld.current.clone().addScaledVector(tmpForward.current, 3),
-      mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH),
-      mouthWorld.current.clone().addScaledVector(tmpForward.current, 2).add(new Vector3(0, -2, 0)),
-    ];
-    playerFireState.active = firing;
-    playerFireState.centers = fireTargets;
-    playerFireState.radius = FIRE_HIT_RADIUS;
-
     if (checkTrigger(position, altarPos, 12)) {
       onTrigger("https://www.zhenggdove.com/exhibition");
     }
@@ -896,7 +908,6 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
         tailMidRef={tailMidRef}
         tailTipRef={tailTipRef}
         breathStatus={breathStatus}
-        hitFlash={hitFlash}
       />
     </group>
   );
@@ -1657,199 +1668,6 @@ const HyperBurningDebris = () => {
 export default WorldEnvironment;
     </script>
 
-    <!-- FILE: components/playerState.ts -->
-    <script type="text/plain" id="vfs-playerState">
-// 火焰狀態（供小雞判斷，暫時僅占位，若主角噴火可在此更新）
-export const playerFireState = {
-  active: false,
-  centers: [],
-  radius: 1.6,
-};
-    </script>
-
-    <!-- FILE: components/Chickens.tsx -->
-    <script type="text/plain" id="vfs-Chickens">
-import React, { useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
-import * as THREE from 'three';
-import { playerFireState } from 'playerState';
-
-// --- 小雞可調參數（中文標註，您可在此修改行為/尺寸/數量/速度/警戒區域） ---
-const CHICKEN_COUNT = 5;       // 小雞數量
-const BASE_HEIGHT = 8.5;       // 基準高度（平台上方）
-const AREA_X = 30;             // 活動範圍 X 半徑
-const AREA_Z_MIN = -90;        // 活動範圍 Z 最小
-const AREA_Z_MAX = -55;        // 活動範圍 Z 最大
-const WANDER_SPEED = 2.2;      // 遊走速度（加快）
-const CHASE_SPEED = 6.2;       // 追擊速度（加快）
-const ALERT_RADIUS = 20;       // 警戒半徑（眼睛轉紅並追擊）
-const HIT_RADIUS = 5;        // 撞擊主角半徑
-const HOP_HEIGHT = 0.9;        // 彈跳高度
-const HOP_SPEED = 5.0;         // 彈跳頻率
-const DRUMSTICK_DURATION = 10;  // 雞腿停留秒數（逐漸消失）
-const CHICKEN_SCALE = 1.3;     // 小雞整體縮放（原本 3，現在縮小為 30% 的 0.9）
-
-type Mode = 'wander' | 'chase' | 'drumstick';
-interface Chick {
-  pos: THREE.Vector3;
-  vel: THREE.Vector3;
-  dir: number;
-  timer: number;
-  hopOff: number;
-  mode: Mode;
-  alert: boolean;
-  drumTime: number;
-  opacity: number;
-  collected?: boolean;
-}
-
-const createInitialChicks = (): Chick[] => {
-  return Array.from({ length: CHICKEN_COUNT }).map(() => ({
-    pos: new THREE.Vector3(
-      (Math.random() - 0.5) * AREA_X * 1.6,
-      BASE_HEIGHT,
-      THREE.MathUtils.lerp(AREA_Z_MIN, AREA_Z_MAX, Math.random())
-    ),
-    vel: new THREE.Vector3(),
-    dir: Math.random() * Math.PI * 2,
-    timer: 1 + Math.random() * 1.5,
-    hopOff: Math.random() * Math.PI * 2,
-    mode: 'wander' as Mode,
-    alert: false,
-    drumTime: 0,
-    opacity: 1,
-  }));
-};
-
-const Chickens: React.FC<{ onPlayerHit?: () => void }> = ({ onPlayerHit }) => {
-  const { scene } = useThree();
-  const chickens = useRef<Chick[]>(createInitialChicks());
-
-  useFrame((state, delta) => {
-    const player = scene.getObjectByName('PlayerGroup') as THREE.Group | null;
-    const playerPos = player ? player.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 8, -70);
-
-    chickens.current.forEach((c) => {
-      if (c.mode === 'drumstick') {
-        c.drumTime += delta;
-        c.opacity = Math.max(0, 1 - c.drumTime / DRUMSTICK_DURATION);
-        c.vel.set(0, 0, 0);
-      } else {
-        const dist = c.pos.distanceTo(playerPos);
-        c.alert = dist < ALERT_RADIUS;
-        c.mode = c.alert ? 'chase' : 'wander';
-        c.timer -= delta;
-        if (c.timer <= 0) {
-          c.timer = 1 + Math.random() * 2;
-          c.dir = Math.random() * Math.PI * 2;
-        }
-        const dirVec = c.alert
-          ? playerPos.clone().sub(c.pos).setY(0)
-          : new THREE.Vector3(Math.sin(c.dir), 0, Math.cos(c.dir));
-        if (dirVec.lengthSq() > 0.0001) dirVec.normalize();
-        const speed = c.alert ? CHASE_SPEED : WANDER_SPEED;
-        const target = dirVec.multiplyScalar(speed);
-        c.vel.lerp(target, 0.12);
-        c.pos.addScaledVector(c.vel, delta);
-        c.pos.x = THREE.MathUtils.clamp(c.pos.x, -AREA_X, AREA_X);
-        c.pos.z = THREE.MathUtils.clamp(c.pos.z, AREA_Z_MIN, AREA_Z_MAX);
-        c.pos.y = BASE_HEIGHT + Math.sin(state.clock.getElapsedTime() * HOP_SPEED + c.hopOff) * HOP_HEIGHT;
-        if (dist < HIT_RADIUS) {
-          if (onPlayerHit) onPlayerHit();
-          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-            try { navigator.vibrate(120); } catch (e) {}
-          }
-        }
-        if (playerFireState.active) {
-          for (const center of playerFireState.centers) {
-            if (center.distanceTo(c.pos) < playerFireState.radius) {
-              c.mode = 'drumstick';
-              c.drumTime = 0;
-              c.opacity = 1;
-              break;
-            }
-          }
-        }
-      }
-    });
-  });
-
-  return (
-    <group frustumCulled={false}>
-      {chickens.current.map((_, i) => (
-        <ChickenModel key={i} data={chickens} index={i} />
-      ))}
-    </group>
-  );
-};
-
-const ChickenModel = ({ data, index }: { data: React.MutableRefObject<Chick[]>; index: number }) => {
-  const ref = useRef<THREE.Group>(null);
-  const live = useRef<THREE.Group>(null);
-  const drum = useRef<THREE.Group>(null);
-  const leftEyeMat = useRef<THREE.PointsMaterial>(null);
-  const rightEyeMat = useRef<THREE.PointsMaterial>(null);
-  const drumMat = useRef<THREE.PointsMaterial>(null);
-
-  useFrame(() => {
-    const c = data.current[index];
-    if (!c || !ref.current) return;
-    ref.current.position.copy(c.pos);
-    if (c.vel.lengthSq() > 0.001) {
-      ref.current.rotation.y = Math.atan2(c.vel.x, c.vel.z);
-    }
-    if (live.current) live.current.visible = c.mode !== 'drumstick';
-    if (drum.current) {
-      drum.current.visible = c.mode === 'drumstick' && c.opacity > 0.01;
-    }
-    const eyeColor = c.alert ? '#ff2222' : '#222222';
-    if (leftEyeMat.current) leftEyeMat.current.color.set(eyeColor);
-    if (rightEyeMat.current) rightEyeMat.current.color.set(eyeColor);
-    if (drumMat.current) drumMat.current.opacity = c.opacity;
-  });
-
-  return (
-    <group ref={ref} frustumCulled={false} scale={[CHICKEN_SCALE, CHICKEN_SCALE, CHICKEN_SCALE]}>
-      <group ref={live}>
-        <PointsShape geometry={new THREE.BoxGeometry(1.4, 1.2, 1.2, 16, 16, 16)} position={[0, 0.8, 0]} color="#ffffdd" size={0.14} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.9, 0.8, 0.9, 14, 14, 14)} position={[0, 1.7, 0.4]} color="#fff7cc" size={0.14} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.4, 0.2, 1.0, 10, 6, 14)} position={[0, 1.2, -0.6]} color="#ffeedd" size={0.12} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 10, 8, 6)} position={[0.85, 1.0, -0.1]} rotation={[0, 0, -0.4]} color="#fff1dd" size={0.12} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 10, 8, 6)} position={[-0.85, 1.0, -0.1]} rotation={[0, 0, 0.4]} color="#fff1dd" size={0.12} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 12, 3)} position={[0.35, 0.2, -0.05]} color="#ffae52" size={0.12} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 12, 3)} position={[-0.35, 0.2, -0.05]} color="#ffae52" size={0.12} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 6, 4, 6)} position={[0.35, -0.2, 0.05]} color="#ffae52" size={0.12} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 6, 4, 6)} position={[-0.35, -0.2, 0.05]} color="#ffae52" size={0.12} sizeAttenuation={false} depthTest={false} />
-        {/* 黃色鑽石形嘴巴（Octahedron 模擬鑽石） */}
-        <PointsShape geometry={new THREE.OctahedronGeometry(0.18, 1)} position={[0, 1.55, 0.9]} color="#ffd54f" size={0.14} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.08, 12, 12)} position={[0.25, 1.75, 0.55]} color="#111111" size={0.12} materialRef={leftEyeMat} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.08, 12, 12)} position={[-0.25, 1.75, 0.55]} color="#111111" size={0.12} materialRef={rightEyeMat} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.15, 10, 10)} position={[0, 2.05, 0.2]} color="#ff4466" size={0.12} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.13, 10, 10)} position={[0.15, 2.0, 0.0]} color="#ff4466" size={0.12} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.13, 10, 10)} position={[-0.15, 2.0, 0.0]} color="#ff4466" size={0.12} sizeAttenuation={false} depthTest={false} />
-      </group>
-      <group ref={drum} visible={false}>
-        <PointsShape geometry={new THREE.SphereGeometry(0.9, 16, 16)} position={[0, 0.2, 0]} scale={[1.4, 0.8, 1.0]} color="#c47a2c" size={0.14} opacity={1} materialRef={drumMat} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 12, 3)} position={[0.8, 0.9, 0]} rotation={[0,0,1.57]} color="#ffffff" size={0.14} opacity={1} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.18, 12, 12)} position={[1.25, 1.35, 0]} color="#ffffff" size={0.14} opacity={1} sizeAttenuation={false} depthTest={false} />
-      </group>
-      <pointLight position={[0, 2.5, 0]} intensity={6} distance={25} color="#ffeeaa" />
-    </group>
-  );
-};
-
-const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity = 1, materialRef, sizeAttenuation = false, depthTest = true }: any) => {
-  return (
-    <points position={position} rotation={rotation} scale={scale} frustumCulled={false}>
-      <primitive object={geometry} attach="geometry" />
-      <pointsMaterial ref={materialRef} size={size} color={color} sizeAttenuation={sizeAttenuation} transparent opacity={opacity} depthTest={depthTest} />
-    </points>
-  );
-};
-
-export default Chickens;
-    </script>
-
     <!-- FILE: components/Scene.tsx -->
     <script type="text/plain" id="vfs-Scene">
 import React, { useRef, useState } from 'react';
@@ -1857,7 +1675,6 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Environment as DreiEnv, Text3D, Center, MeshDistortMaterial } from '@react-three/drei';
 import Player from 'Player';
 import WorldEnvironment from 'WorldEnvironment';
-import Chickens from 'Chickens';
 import * as THREE from 'three';
 
 export const LABEL_DATA = [
@@ -1872,21 +1689,13 @@ interface SceneProps {
 }
 
 const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
-  const [hitFlash, setHitFlash] = useState(false);
-
-  const handlePlayerHit = () => {
-    setHitFlash(true);
-    setTimeout(() => setHitFlash(false), 200);
-  };
   return (
     <>
       <ambientLight intensity={0.2} />
       <pointLight position={[10, 10, 10]} intensity={0.5} color="#00ffff" />
       <pointLight position={[-10, 15, -10]} intensity={0.5} color="#ff00ff" />
       <fog attach="fog" args={['#050505', 150, 1500]} />
-      <Player onTrigger={onTrigger} isLocked={isLocked} hitFlash={hitFlash} />
-      {/* 小雞點雲群組：固定平台中心，彈跳/遊走/追擊 */}
-      <Chickens onPlayerHit={handlePlayerHit} />
+      <Player onTrigger={onTrigger} isLocked={isLocked} />
       <WorldEnvironment />
       <ChromeLabelSystem />
       <DreiEnv preset="night" />
@@ -2034,7 +1843,7 @@ root.render(
       async function init() {
         try {
           const blobUrls = {};
-          const files = ['useInput', 'UIOverlay', 'WorldEnvironment', 'Player', 'Chickens', 'playerState', 'Scene', 'App', 'index'];
+          const files = ['useInput', 'UIOverlay', 'WorldEnvironment', 'Player', 'Scene', 'App', 'index'];
           
           for (const name of files) {
             const rawCode = document.getElementById('vfs-' + name).textContent;
@@ -2047,8 +1856,17 @@ root.render(
             blobUrls[name] = URL.createObjectURL(blob);
           }
 
-          // 頂部已宣告外部 import map，這裡僅加入本地 blob 模組以避免重複衝突
-          const importMap = { imports: { ...blobUrls } };
+          const externalImports = {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+            "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.15.16?external=react,react-dom,three",
+            "@react-three/drei": "https://esm.sh/@react-three/drei@9.99.0?external=react,react-dom,three,@react-three/fiber",
+            "three": "https://esm.sh/three@0.161.0",
+            "three-stdlib": "https://esm.sh/three-stdlib@2.29.4?external=three"
+          };
+          
+          const importMap = { imports: { ...externalImports, ...blobUrls } };
           const mapScript = document.createElement('script');
           mapScript.type = 'importmap';
           mapScript.textContent = JSON.stringify(importMap);
@@ -2068,6 +1886,7 @@ root.render(
       }
       init();
     </script>
+  <script type="module" src="/index.tsx"></script>
 </body>
 </html>
 

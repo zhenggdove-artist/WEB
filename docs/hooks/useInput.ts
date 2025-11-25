@@ -6,7 +6,6 @@ export const useInput = () => {
     backward: false,
     left: false,
     right: false,
-    fire: false, // 火焰鍵（Space/KeyJ，可在此增加/修改）
     joystickX: 0,
     joystickY: 0,
   });
@@ -30,10 +29,6 @@ export const useInput = () => {
         case 'ArrowRight':
           setInput((prev) => ({ ...prev, right: true }));
           break;
-        case 'Space':
-        case 'KeyJ':
-          setInput((prev) => ({ ...prev, fire: true }));
-          break;
       }
     };
 
@@ -54,10 +49,6 @@ export const useInput = () => {
         case 'KeyD':
         case 'ArrowRight':
           setInput((prev) => ({ ...prev, right: false }));
-          break;
-        case 'Space':
-        case 'KeyJ':
-          setInput((prev) => ({ ...prev, fire: false }));
           break;
       }
     };

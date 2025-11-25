@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Environment as DreiEnv, Text3D, Center, MeshDistortMaterial } from '@react-three/drei';
 import Player from './Player.tsx';
 import WorldEnvironment from './WorldEnvironment.tsx';
-import * as THREE from 'three';
 import Chickens from './Chickens.tsx';
+import * as THREE from 'three';
 
 // --- LABEL CONFIGURATION (EDIT HERE) ---
 // Adjust the position [x, y, z] to change height or location.
@@ -29,21 +29,6 @@ interface SceneProps {
 }
 
 const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
-  const [playerHitFlash, setPlayerHitFlash] = useState(false);
-  const hitFlashTimer = useRef<number | null>(null);
-
-  const triggerPlayerHitFlash = () => {
-    setPlayerHitFlash(true);
-    if (hitFlashTimer.current) window.clearTimeout(hitFlashTimer.current);
-    hitFlashTimer.current = window.setTimeout(() => setPlayerHitFlash(false), 200);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (hitFlashTimer.current) window.clearTimeout(hitFlashTimer.current);
-    };
-  }, []);
-
   return (
     <>
       <ambientLight intensity={0.2} />
@@ -53,10 +38,9 @@ const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
       {/* Deep Fog for depth and fade out effect */}
       <fog attach="fog" args={['#050505', 150, 1500]} />
 
-      <Player onTrigger={onTrigger} isLocked={isLocked} hitFlash={playerHitFlash} />
-      <Chickens onPlayerHit={triggerPlayerHitFlash} />
+      <Player onTrigger={onTrigger} isLocked={isLocked} />
+      <Chickens />
       <WorldEnvironment />
-      
       <ChromeLabelSystem />
 
       {/* Subtle reflections */}
