@@ -528,100 +528,31 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
 
     useFrame((rState, delta) => {
         const time = rState.clock.getElapsedTime();
+        if (!meshRef.current) return;
 
-        // 手動火焰：按鈕/鍵時立即保持 FIRING 狀態
-        if (breathStatus.current.manualFire) {
-            if (state !== 'FIRING') setState('FIRING');
-            progress.current = 1.0;
-            fadeRef.current = 1.0;
-            breathStatus.current.isFiring = true;
-            breathStatus.current.isMouthOpen = true;
+        // 只在手動噴火時運作，否則關閉顯示以降低負載（手機穩定）
+        if (!breathStatus.current.manualFire) {
+            breathStatus.current.isFiring = false;
+            breathStatus.current.isMouthOpen = false;
             breathStatus.current.isRoaring = false;
+            meshRef.current.visible = false;
+            progress.current = 0;
+            fadeRef.current = 0;
+            return;
         }
-        
-        // --- ANIMATION STATE MACHINE ---
-        switch (state) {
-            case 'IDLE':
-                breathStatus.current.isFiring = false;
-                breathStatus.current.isMouthOpen = false;
-                breathStatus.current.isRoaring = false;
-                progress.current = 0;
-                fadeRef.current = 0;
-                fireHoldRef.current = 0;
-                firePlanRef.current = false;
-                if (breathStatus.current.manualFire) {
-                    firePlanRef.current = true;
-                    setState('PRE_FIRE');
-                    timerRef.current = 0;
-                    fireTimerRef.current = 0;
-                    fireHoldRef.current = 0;
-                }
-                break;
 
-            case 'PRE_FIRE':
-                breathStatus.current.isMouthOpen = true; 
-                breathStatus.current.isFiring = false; 
-                breathStatus.current.isRoaring = false;
-                timerRef.current += delta;
-                const preDelay = FIRE_MOUTH_DELAY;
-                if (!breathStatus.current.manualFire) {
-                    setState('IDLE');
-                } else if (timerRef.current > preDelay) {
-                    setState('FIRING');
-                    progress.current = 0.0;
-                    fireHoldRef.current = 0;
-                    fireTimerRef.current = 0;
-                    fadeRef.current = 1;
-                    breathStatus.current.isRoaring = false;
-                }
-                break;
+        breathStatus.current.isFiring = true;
+        breathStatus.current.isMouthOpen = true;
+        breathStatus.current.isRoaring = false;
 
-            case 'ROAR':
-                // 不再自動怒吼，直接回 IDLE
-                setState('IDLE');
-                break;
+        progress.current = Math.min(1.0, progress.current + delta * BREATH_TIMING.fireGrowSpeed);
+        fadeRef.current = 1.0;
+        fireTimerRef.current += delta;
 
-            case 'FIRING':
-                breathStatus.current.isFiring = true;
-                breathStatus.current.isMouthOpen = true;
-                breathStatus.current.isRoaring = false;
-                fireTimerRef.current += delta;
-                // Animate progress 0 -> 1 (Shooting out)
-                progress.current = Math.min(1.0, progress.current + delta * BREATH_TIMING.fireGrowSpeed);
-                if (!breathStatus.current.manualFire) {
-                    setState('FADING');
-                }
-                break;
-
-            case 'FADING':
-                breathStatus.current.isFiring = true;
-                breathStatus.current.isMouthOpen = true;
-                breathStatus.current.isRoaring = false;
-                // Keep full length, only fade away
-                progress.current = 1.0;
-                timerRef.current += delta;
-                fireTimerRef.current += delta;
-                fadeRef.current = Math.max(0, 1 - timerRef.current * BREATH_TIMING.fadeSpeed);
-                // If total fire time exceeds 1s, force fade to 0
-                if (fireTimerRef.current >= 1.0) {
-                    fadeRef.current = 0;
-                }
-                if (breathStatus.current.manualFire) {
-                    setState('FIRING');
-                    progress.current = 1.0;
-                    fadeRef.current = 1.0;
-                    fireTimerRef.current = 0;
-                    timerRef.current = 0;
-                } else if (fadeRef.current <= 0.01) {
-                    breathStatus.current.isFiring = false;
-                    breathStatus.current.isMouthOpen = false;
-                    breathStatus.current.isRoaring = false;
-                    fireHoldRef.current = 0;
-                    fireTimerRef.current = 0;
-                    setState('IDLE');
-                }
-                break;
-        }
+        uniforms.uTime.value = time;
+        uniforms.uFireScale.value = progress.current;
+        uniforms.uFade.value = fadeRef.current;
+        meshRef.current.visible = true;
 
         // Update Shader
         if (meshRef.current) {
