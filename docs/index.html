@@ -292,14 +292,14 @@ const BREATH_CONFIG = {
 
 // --- BREATH TIMING (????/????) ---
 const BREATH_TIMING = {
-    preFireDelay: 0.3,      // ????????? (?)
-    fireGrowSpeed: 30,       // ?????? (????)
-    fadeSpeed: 30,          // ?????? (?)
-    fireDuration: 0.001,       // ???????? (?)
-    mouthHoldNoFire: 0.2,   // ?????????????? (?)
-    idleDelayMin: 0.1,       // ?????? (?)
-    idleDelayJitter: 0.1,    // ???????? (?)
-    fireProbability: 0.6     // ??????????
+    preFireDelay: 0.05,      // 噴火前張嘴準備時間 (秒)
+    fireGrowSpeed: 30,       // 火焰展開速度 (越大越快)
+    fadeSpeed: 3.0,          // 火焰消散速度 (秒)
+    fireDuration: 1.0,       // 火焰持續時間上限 (秒)
+    mouthHoldNoFire: 0.2,    // 只張嘴不噴火時維持張開的時間 (秒)
+    idleDelayMin: 0.2,       // 觸發最小間隔 (秒)
+    idleDelayJitter: 0.1,    // 觸發間隔隨機範圍 (秒)
+    fireProbability: 0.6     // 張嘴後觸發噴火的機率
 };
 
 // --- BREATH LOOK (????) ---
@@ -516,15 +516,15 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 progress.current = 0;
                 fadeRef.current = 0;
                 fireHoldRef.current = 0;
-                firePlanRef.current = false;
-                if (time > nextTriggerTime.current) {
-                    firePlanRef.current = Math.random() < BREATH_TIMING.fireProbability;
-                    setState('PRE_FIRE');
-                    timerRef.current = 0; // Reset local timer
-                    fireTimerRef.current = 0;
-                    fireHoldRef.current = 0;
-                }
-                break;
+    firePlanRef.current = false;
+    if (time > nextTriggerTime.current) {
+        firePlanRef.current = breathStatus.current.forceFire ? true : Math.random() < BREATH_TIMING.fireProbability;
+        setState('PRE_FIRE');
+        timerRef.current = 0; // Reset local timer
+        fireTimerRef.current = 0;
+        fireHoldRef.current = 0;
+    }
+    break;
 
             case 'PRE_FIRE':
                 // Open jaw BEFORE firing
@@ -563,6 +563,13 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 breathStatus.current.isMouthOpen = true;
                 breathStatus.current.isRoaring = false;
                 fireTimerRef.current += delta;
+                // If player is holding movement, keep forcing fire and skip caps
+                if (breathStatus.current.forceFire) {
+                    fireTimerRef.current = 0;
+                    fireHoldRef.current = 0;
+                    progress.current = Math.min(1, progress.current + delta * BREATH_TIMING.fireGrowSpeed);
+                    break;
+                }
                 // Hard cap: stop everything at 1s total
                 if (fireTimerRef.current >= 1.0) {
                     fireTimerRef.current = 0;
@@ -592,6 +599,16 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 breathStatus.current.isFiring = true;
                 breathStatus.current.isMouthOpen = true;
                 breathStatus.current.isRoaring = false;
+                // If player holds movement, jump back to FIRING
+                if (breathStatus.current.forceFire) {
+                    setState('FIRING');
+                    timerRef.current = 0;
+                    fireTimerRef.current = 0;
+                    fireHoldRef.current = 0;
+                    fadeRef.current = 1;
+                    progress.current = Math.min(1, progress.current + delta * BREATH_TIMING.fireGrowSpeed);
+                    break;
+                }
                 // Keep full length, only fade away
                 progress.current = 1.0;
                 timerRef.current += delta;
@@ -764,7 +781,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const [position] = useState(new Vector3(0, 0, 10)); 
 
   // --- Breath Status Ref (Shared between Player and DinoBreath) ---
-  const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0, isRoaring: false });
+  const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0, isRoaring: false, forceFire: false });
 
   // --- [可修改] 恐龍移動速度 (Speed) ---
   const speed = 2.0;
@@ -822,6 +839,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
 
     const time = state.clock.getElapsedTime();
     const isMoving = Math.abs(moveForward) > 0.1 || Math.abs(moveTurn) > 0.1;
+    breathStatus.current.forceFire = isMoving && !isLocked;
     
     const bobFreq = 10;
     const bobAmp = 0.15;
