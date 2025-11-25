@@ -587,10 +587,9 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
             const currentScale = state === 'FADING' ? 1 : progress.current;
             mat.uniforms.uFireScale.value = currentScale;
             mat.uniforms.uFade.value = fadeRef.current;
-            // Counter jaw rotation to keep flame horizontal
+            // 手動時固定往下 45 度，其餘依口型對齊
             const mouthAngle = breathStatus.current.mouthAngle || 0;
-            meshRef.current.rotation.x = -mouthAngle;
-            // Hide mesh if idle or faded
+            meshRef.current.rotation.x = breathStatus.current.manualFire ? -Math.PI * 0.25 : -mouthAngle;
             meshRef.current.visible = ((state === 'FIRING' || state === 'FADING') || breathStatus.current.manualFire) && fadeRef.current > 0.01; 
         }
     });
