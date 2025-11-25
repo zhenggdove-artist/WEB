@@ -39,12 +39,14 @@ const DRUMSTICK_DURATION = 5; // 雞腿停留秒數（逐漸消失）
 const FIRE_PADDING = 0.2; // 火焰判定緩衝
 
 const createInitialChickens = (): ChickenState[] => {
-  const centerZ = -60; // 初始集中在靠近玩家視野的區段
-  return Array.from({ length: CHICKEN_COUNT }).map(() => ({
+  // 固定初始位置讓進入場景時一定能看到（平台中央一字排開）
+  const startXs = [-12, -6, 0, 6, 12];
+  const startZ = -70;
+  return Array.from({ length: CHICKEN_COUNT }).map((_, i) => ({
     position: new THREE.Vector3(
-      (Math.random() - 0.5) * AREA_X * 1.2,
+      startXs[i % startXs.length] + (Math.random() - 0.5) * 1.5,
       BASE_HEIGHT,
-      centerZ + (Math.random() - 0.5) * 30
+      startZ + (Math.random() - 0.5) * 4
     ),
     velocity: new THREE.Vector3(),
     wanderDir: Math.random() * Math.PI * 2,
