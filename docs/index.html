@@ -1,3 +1,509 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Point Cloud Portal</title>
+    
+    <!-- Load Babel for in-browser compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #050011; }
+      #root { width: 100%; height: 100%; }
+      
+      .app-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background-color: #000000;
+      }
+
+      /* Overlay Fade Effect */
+      .overlay-fade {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none;
+        background-color: #000000;
+        z-index: 50;
+        transition: opacity 2000ms ease-in-out;
+        opacity: 0;
+      }
+      .overlay-fade.active {
+        opacity: 1;
+      }
+
+      /* Joystick Controls */
+      .joystick-wrapper {
+        position: absolute;
+        bottom: 48px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 40;
+        user-select: none;
+        -webkit-user-select: none;
+        display: block;
+      }
+      @media (min-width: 768px) {
+        .joystick-wrapper {
+          display: none;
+        }
+      }
+
+      .joystick-base {
+        width: 128px;
+        height: 128px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        background-color: rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .joystick-stick {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background-color: rgba(34, 211, 238, 0.5);
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.8);
+        border: 1px solid rgb(165, 243, 252);
+      }
+      
+      /* Loading Screen */
+      #loader {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        color: #00ffff;
+        font-family: monospace;
+        font-size: 16px;
+        z-index: 100;
+        background: rgba(0,0,0,0.8);
+        padding: 20px;
+        border: 1px solid #00ffff;
+        border-radius: 8px;
+      }
+    </style>
+    
+    <!-- Import Map -->
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.15.16?external=react,react-dom,three",
+    "@react-three/drei": "https://esm.sh/@react-three/drei@9.99.0?external=react,react-dom,three,@react-three/fiber",
+    "three": "https://esm.sh/three@0.161.0",
+    "three-stdlib": "https://esm.sh/three-stdlib@2.29.4?external=three",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <div id="loader">Initializing System...</div>
+
+    <!-- ========================================== -->
+    <!-- VIRTUAL FILE SYSTEM (EMBEDDED SOURCE CODE) -->
+    <!-- ========================================== -->
+
+    <!-- FILE: hooks/useInput.ts -->
+    <script type="text/plain" id="vfs-useInput">
+import { useState, useEffect } from 'react';
+
+export const useInput = () => {
+  const [input, setInput] = useState({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    joystickX: 0,
+    joystickY: 0,
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.code) {
+        case 'KeyW':
+        case 'ArrowUp':
+          setInput((prev) => ({ ...prev, forward: true }));
+          break;
+        case 'KeyS':
+        case 'ArrowDown':
+          setInput((prev) => ({ ...prev, backward: true }));
+          break;
+        case 'KeyA':
+        case 'ArrowLeft':
+          setInput((prev) => ({ ...prev, left: true }));
+          break;
+        case 'KeyD':
+        case 'ArrowRight':
+          setInput((prev) => ({ ...prev, right: true }));
+          break;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      switch (e.code) {
+        case 'KeyW':
+        case 'ArrowUp':
+          setInput((prev) => ({ ...prev, forward: false }));
+          break;
+        case 'KeyS':
+        case 'ArrowDown':
+          setInput((prev) => ({ ...prev, backward: false }));
+          break;
+        case 'KeyA':
+        case 'ArrowLeft':
+          setInput((prev) => ({ ...prev, left: false }));
+          break;
+        case 'KeyD':
+        case 'ArrowRight':
+          setInput((prev) => ({ ...prev, right: false }));
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  const setJoystick = (x: number, y: number) => {
+    setInput((prev) => ({ ...prev, joystickX: x, joystickY: y }));
+  };
+
+  return { input, setJoystick };
+};
+    </script>
+
+    <!-- FILE: components/UIOverlay.tsx -->
+    <script type="text/plain" id="vfs-UIOverlay">
+import React, { useRef, useState } from 'react';
+
+interface UIOverlayProps {
+  isFading: boolean;
+}
+
+export const joystickState = { x: 0, y: 0 };
+
+const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
+  const stickRef = useRef<HTMLDivElement>(null);
+  const baseRef = useRef<HTMLDivElement>(null);
+  const [touching, setTouching] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouching(true);
+    updateJoystick(e.touches[0]);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touching) {
+      updateJoystick(e.touches[0]);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setTouching(false);
+    setPos({ x: 0, y: 0 });
+    joystickState.x = 0;
+    joystickState.y = 0;
+  };
+
+  const updateJoystick = (touch: React.Touch) => {
+    if (!baseRef.current) return;
+    const baseRect = baseRef.current.getBoundingClientRect();
+    const centerX = baseRect.left + baseRect.width / 2;
+    const centerY = baseRect.top + baseRect.height / 2;
+
+    const maxDist = baseRect.width / 2;
+
+    let dx = touch.clientX - centerX;
+    let dy = touch.clientY - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > maxDist) {
+      const angle = Math.atan2(dy, dx);
+      dx = Math.cos(angle) * maxDist;
+      dy = Math.sin(angle) * maxDist;
+    }
+
+    setPos({ x: dx, y: dy });
+    joystickState.x = dx / maxDist;
+    joystickState.y = -(dy / maxDist); 
+  };
+
+  return (
+    <>
+      <div className={`overlay-fade ${isFading ? 'active' : ''}`} />
+      <div 
+        className="joystick-wrapper"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div ref={baseRef} className="joystick-base">
+          <div 
+            ref={stickRef}
+            className="joystick-stick"
+            style={{
+              transform: `translate(${pos.x}px, ${pos.y}px)`,
+              transition: touching ? 'none' : 'transform 0.2s ease-out'
+            }}
+          />
+        </div>
+      </div>
+    </>
+  );
+};
+export default UIOverlay;
+    </script>
+
+    <!-- FILE: components/Player.tsx -->
+    <script type="text/plain" id="vfs-Player">
+import React, { useRef, useState, useMemo } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import { Vector3, Group, MathUtils, BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry } from 'three';
+import { useInput } from 'useInput';
+import { joystickState } from 'UIOverlay';
+import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import * as THREE from 'three';
+
+// --- [可修改] 恐龍火焰噴射長度與設定 ---
+const BREATH_CONFIG = {
+    length: 3.0,       // 火焰噴射的最大距離 (長度)
+    speed: 90,        // 火焰粒子的飛行速度 (提高以加快水平噴射)
+    spread: 1.1,        // 火焰擴散的寬度 (錐形角度)
+    particleSize: 0.3,  // 每個火焰點的大小
+    offset: { x: 0, y: 1, z: 1.2 } // 發射點相對於下顎的位置
+};
+
+// --- BREATH TIMING (????/????) ---
+const BREATH_TIMING = {
+    preFireDelay: 0.05,      // ????????? (?)
+    fireGrowSpeed: 30,       // ?????? (????)
+    fadeSpeed: 3.0,          // ?????? (?)
+    fireDuration: 1.0,       // ???????? (?)
+    mouthHoldNoFire: 0.15,   // ?????????????? (?)
+    idleDelayMin: 0.2,       // ?????? (?)
+    idleDelayJitter: 0.1,    // ???????? (?)
+    fireProbability: 0.6     // ??????????
+};
+
+// --- BREATH LOOK (????) ---
+const FIRE_COLORS = ['#00E3E3', '#ffcc00', '#ffcc00'];
+
+// --- MOUTH CONFIG (????/??) ---
+const MOUTH_CONFIG = {
+    openSpeed: 0.7,
+    closeSpeed: 0.5,
+    fireOpen: 0.9,
+    roarOpen: 0.3,
+    upperFireOpen: -0.35,
+    upperRoarOpen: -0.12,
+};
+// --- HELPER COMPONENTS (Topological Order for Reference) ---
+
+const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
+  return pos.distanceTo(target) < range;
+};
+
+const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity = 1 }: any) => {
+    return (
+        <points position={position} rotation={rotation} scale={scale}>
+            <primitive object={geometry} attach="geometry" />
+            <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={opacity} />
+        </points>
+    )
+}
+
+const TeethRow = ({ count, radius, color, inverted }: any) => {
+    const teeth = [];
+    const dir = inverted ? -1 : 1;
+    for(let i=0; i<count; i++) {
+        const t = (i / (count - 1)); 
+        const angle = (t - 0.5) * 1.5; 
+        const x = Math.sin(angle) * radius * 1.2;
+        const z = Math.cos(angle) * radius; 
+        teeth.push(
+            <PointsShape 
+                key={i} 
+                geometry={new ConeGeometry(0.05, 0.18, 5)} 
+                position={[x, dir * 0.1, z]} 
+                rotation={[dir * Math.PI, 0, 0]} 
+                color={color} 
+                size={0.04} 
+            />
+        )
+    }
+    return <group>{teeth}</group>;
+}
+
+const ThreeToedClaw = ({ position, rotation, scale = 1, color }: any) => {
+    return (
+        <group position={position} rotation={rotation} scale={[scale, scale, scale]}>
+            <PointsShape geometry={new SphereGeometry(0.4, 8, 8)} scale={[1, 0.5, 1]} color={color} size={0.04} />
+            <PointsShape geometry={new ConeGeometry(0.08, 0.6, 6)} position={[0, 0, 0.5]} rotation={[1.6, 0, 0]} color={color} size={0.03} />
+            <PointsShape geometry={new ConeGeometry(0.08, 0.5, 6)} position={[-0.25, 0, 0.4]} rotation={[1.6, 0, 0.3]} color={color} size={0.03} />
+            <PointsShape geometry={new ConeGeometry(0.08, 0.5, 6)} position={[0.25, 0, 0.4]} rotation={[1.6, 0, -0.3]} color={color} size={0.03} />
+        </group>
+    )
+}
+
+const BlinkingEyes = ({ position }: { position: [number, number, number] }) => {
+    const leftEye = useRef<Group>(null);
+    const rightEye = useRef<Group>(null);
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
+        const blink = Math.sin(t * 1.5) > 0.95 ? 0.1 : 1; 
+        if(leftEye.current) leftEye.current.scale.y = blink;
+        if(rightEye.current) rightEye.current.scale.y = blink;
+    });
+    return (
+        <group position={position}>
+            <group position={[0.6, 0.5, 0.4]} ref={leftEye}>
+                <PointsShape geometry={new SphereGeometry(0.15, 8, 8)} color="#ffff00" size={0.08} />
+            </group>
+            <group position={[-0.6, 0.5, 0.4]} ref={rightEye}>
+                <PointsShape geometry={new SphereGeometry(0.15, 8, 8)} color="#ffff00" size={0.08} />
+            </group>
+        </group>
+    )
+}
+
+// --- DYNAMIC FIRE BREATH SYSTEM ---
+
+const BreathMaterial = {
+    uniforms: {
+        uTime: { value: 0 },
+        uFireScale: { value: 0.0 }, // 0.0 to 1.0 (Controls length flow)
+        uLength: { value: 5 },
+        uSpeed: { value: 5 },
+        uSpread: { value: 1 },
+        uFade: { value: 0 }
+    },
+    vertexShader: `
+        uniform float uTime;
+        uniform float uFireScale;
+        uniform float uLength;
+        uniform float uSpeed;
+        uniform float uSpread;
+        attribute vec3 aVelocity;
+        attribute vec3 aColor;
+        attribute float aOffset;
+        varying vec3 vColor;
+        varying float vAlpha;
+
+        void main() {
+            vColor = aColor;
+            
+            // Forward travel scales with uSpeed and per-particle velocity
+            float travel = (uTime * uSpeed + aOffset) * aVelocity.z;
+            // Loop within length to keep a continuous stream
+            float age = mod(travel, uLength);
+            
+            vec3 pos = position;
+            // Move particles forward
+            pos.z += age; 
+            
+            // --- DYNAMIC CLIPPING FOR ANIMATION ---
+            // Current max visible length based on uFireScale (0 to 1)
+            float currentMaxLength = uLength * uFireScale;
+            float scale = 1.0;
+            
+            // If particle is further than current anim length, hide it
+            if (pos.z > currentMaxLength) {
+                scale = 0.0;
+            }
+            // If scale is effectively 0, hide everything
+            if (uFireScale < 0.01) {
+                scale = 0.0;
+            }
+
+            // Spread outward as Z increases
+            float spreadFactor = (pos.z / uLength) * uSpread;
+            pos.x += aVelocity.x * spreadFactor;
+            pos.y += aVelocity.y * spreadFactor;
+
+            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            
+            gl_PointSize = scale * (1.0 - pos.z/uLength) * 500.0 / -mvPosition.z;
+
+            // Fade out at end of max length
+            vAlpha = scale * (1.0 - smoothstep(uLength * 0.8, uLength, pos.z));
+        }
+    `,
+    fragmentShader: `
+        varying vec3 vColor;
+        varying float vAlpha;
+        uniform float uFade;
+        void main() {
+            if(vAlpha < 0.01) discard;
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            if(length(coord) > 0.5) discard;
+            gl_FragColor = vec4(vColor, vAlpha * uFade);
+        }
+    `
+};
+
+const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
+    const meshRef = useRef<THREE.Points>(null);
+    const [state, setState] = useState<'IDLE' | 'PRE_FIRE' | 'ROAR' | 'FIRING' | 'FADING'>('IDLE');
+    
+    // Timer refs
+    const progress = useRef(0);
+    const nextTriggerTime = useRef(BREATH_TIMING.idleDelayMin + BREATH_TIMING.idleDelayJitter);
+    const timerRef = useRef(0);
+    const fireTimerRef = useRef(0);
+    const fireHoldRef = useRef(0);
+    const fadeRef = useRef(0);
+    const firePlanRef = useRef(false);
+
+    // Particle Gen
+    const particleCount = 1500;
+    const { positions, velocities, colors, offsets } = useMemo(() => {
+        const pos = new Float32Array(particleCount * 3);
+        const vel = new Float32Array(particleCount * 3);
+        const col = new Float32Array(particleCount * 3);
+        const off = new Float32Array(particleCount);
+        const colorPalette = FIRE_COLORS.map(c => new THREE.Color(c));
+        for(let i=0; i<particleCount; i++) {
+            pos[i*3] = (Math.random()-0.5) * 0.1;
+            pos[i*3+1] = (Math.random()-0.5) * 0.1;
+            pos[i*3+2] = 0; 
+            vel[i*3] = (Math.random()-0.5);
+            vel[i*3+1] = (Math.random()-0.5);
+            vel[i*3+2] = 1.6 + Math.random() * 0.8; // Stronger forward push
+            const c = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+            col[i*3] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b;
+            off[i] = Math.random() * 10.0;
+        }
+        return { positions: pos, velocities: vel, colors: col, offsets: off };
+    }, []);
+
+    // Memoize uniforms to prevent reset
+    const uniforms = useMemo(() => ({
+        uTime: { value: 0 },
+        uFireScale: { value: 0 },
+        uLength: { value: BREATH_CONFIG.length },
+        uSpeed: { value: BREATH_CONFIG.speed },
+        uSpread: { value: BREATH_CONFIG.spread },
+        uFade: { value: 0 }
+    }), []);
+
     useFrame((rState, delta) => {
         const time = rState.clock.getElapsedTime();
         
@@ -21,14 +527,15 @@
                 break;
 
             case 'PRE_FIRE':
-                breathStatus.current.isMouthOpen = true;
-                breathStatus.current.isFiring = false;
+                // Open jaw BEFORE firing
+                breathStatus.current.isMouthOpen = true; 
+                breathStatus.current.isFiring = false; 
                 breathStatus.current.isRoaring = !firePlanRef.current;
                 timerRef.current += delta;
-                if (timerRef.current > BREATH_TIMING.preFireDelay) {
+                if (timerRef.current > BREATH_TIMING.preFireDelay) { // Wait preFireDelay seconds
                     if (firePlanRef.current) {
                         setState('FIRING');
-                        progress.current = 0.0;
+                        progress.current = 0.0; // CRITICAL RESET: Start animation from 0
                         fireHoldRef.current = 0;
                         fireTimerRef.current = 0;
                         fadeRef.current = 1;
@@ -47,7 +554,7 @@
                 timerRef.current += delta;
                 if (timerRef.current > BREATH_TIMING.mouthHoldNoFire) {
                     setState('IDLE');
-                    nextTriggerTime.current = time + BREATH_TIMING.idleDelayMin + Math.random() * BREATH_TIMING.idleDelayJitter;
+                    nextTriggerTime.current = time + BREATH_TIMING.idleDelayMin + Math.random() * BREATH_TIMING.idleDelayJitter; // Random delay
                 }
                 break;
 
@@ -56,7 +563,8 @@
                 breathStatus.current.isMouthOpen = true;
                 breathStatus.current.isRoaring = false;
                 fireTimerRef.current += delta;
-                progress.current += delta * BREATH_TIMING.fireGrowSpeed;
+                // Animate progress 0 -> 1 (Shooting out)
+                progress.current += delta * BREATH_TIMING.fireGrowSpeed; 
                 if (progress.current >= 1.0) {
                     progress.current = 1.0;
                     fireHoldRef.current += delta;
@@ -65,6 +573,7 @@
                         setState('FADING');
                     }
                 }
+                // Hard cap total fire time
                 if (fireTimerRef.current >= 1.0) {
                     fireHoldRef.current = 0;
                 }
@@ -74,18 +583,23 @@
                 breathStatus.current.isFiring = true;
                 breathStatus.current.isMouthOpen = true;
                 breathStatus.current.isRoaring = false;
+                // Keep full length, only fade away
                 progress.current = 1.0;
                 timerRef.current += delta;
                 fireTimerRef.current += delta;
                 fadeRef.current = Math.max(0, 1 - timerRef.current * BREATH_TIMING.fadeSpeed);
-                if (fireTimerRef.current >= 1.0 || fadeRef.current <= 0.01) {
+                // If total fire time exceeds 1s, force fade to 0
+                if (fireTimerRef.current >= 1.0) {
+                    fadeRef.current = 0;
+                }
+                if (fadeRef.current <= 0.01) {
                     breathStatus.current.isFiring = false;
                     breathStatus.current.isMouthOpen = false;
                     breathStatus.current.isRoaring = false;
                     fireHoldRef.current = 0;
                     fireTimerRef.current = 0;
                     setState('IDLE');
-                    nextTriggerTime.current = time + BREATH_TIMING.idleDelayMin + Math.random() * BREATH_TIMING.idleDelayJitter;
+                    nextTriggerTime.current = time + BREATH_TIMING.idleDelayMin + Math.random() * BREATH_TIMING.idleDelayJitter; // Random delay
                 }
                 break;
         }
@@ -94,11 +608,1299 @@
         if (meshRef.current) {
             const mat = meshRef.current.material as THREE.ShaderMaterial;
             mat.uniforms.uTime.value += delta;
+            // Map progress to uFireScale
             const currentScale = state === 'FADING' ? 1 : progress.current;
             mat.uniforms.uFireScale.value = currentScale;
             mat.uniforms.uFade.value = fadeRef.current;
+            // Counter jaw rotation to keep flame horizontal
             const mouthAngle = breathStatus.current.mouthAngle || 0;
             meshRef.current.rotation.x = -mouthAngle;
-            meshRef.current.visible = (state === 'FIRING' || state === 'FADING') && fadeRef.current > 0.01;
+            // Hide mesh if idle or faded
+            meshRef.current.visible = (state === 'FIRING' || state === 'FADING') && fadeRef.current > 0.01; 
         }
     });
+
+    return (
+        <points ref={meshRef} position={[BREATH_CONFIG.offset.x, BREATH_CONFIG.offset.y, BREATH_CONFIG.offset.z]} rotation={[0, 0, 0]}>
+            <bufferGeometry>
+                <bufferAttribute attach="attributes-position" count={particleCount} array={positions} itemSize={3} />
+                <bufferAttribute attach="attributes-aVelocity" count={particleCount} array={velocities} itemSize={3} />
+                <bufferAttribute attach="attributes-aColor" count={particleCount} array={colors} itemSize={3} />
+                <bufferAttribute attach="attributes-aOffset" count={particleCount} array={offsets} itemSize={1} />
+            </bufferGeometry>
+            <shaderMaterial 
+                vertexShader={BreathMaterial.vertexShader}
+                fragmentShader={BreathMaterial.fragmentShader}
+                uniforms={uniforms}
+                transparent
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+            />
+        </points>
+    );
+};
+
+const TRexModel: React.FC<any> = ({ 
+    leftLegRef, rightLegRef, leftArmRef, rightArmRef, jawRef, upperJawRef,
+    tailBaseRef, tailMidRef, tailTipRef, breathStatus 
+}) => {
+  const skinColor = "#00ff66"; 
+  const detailColor = "#00cc44";
+  const clawColor = "#ccffcc";
+  const teethColor = "#ffffff";
+  const tongueColor = "#ff0044";
+  const gumColor = "#880022"; 
+  
+  const materialProps = {
+    size: 0.05, 
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.9,
+  };
+
+  return (
+    <group rotation={[0, Math.PI, 0]} scale={[0.8, 0.8, 0.8]}>
+      <group>
+          <group position={[0, 4.2, 2.2]}>
+            <group ref={upperJawRef}>
+                <PointsShape geometry={new BoxGeometry(1.5, 1.4, 1.5, 12, 12, 12)} position={[0, 0.2, 0]} color={skinColor} {...materialProps} />
+                <PointsShape geometry={new CylinderGeometry(0.5, 0.75, 1.6, 12, 8)} position={[0, 0.1, 1.5]} rotation={[1.57, 0, 0]} color={skinColor} {...materialProps} />
+                <PointsShape geometry={new BoxGeometry(0.8, 0.2, 1.4, 8, 2, 8)} position={[0, -0.4, 1.2]} color={gumColor} size={0.04} />
+                <group position={[0, -0.4, 1.2]}>
+                    <TeethRow count={8} radius={0.45} color={teethColor} inverted={false} />
+                </group>
+                
+                <BlinkingEyes position={[0, 0, 0]} />
+
+                <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[0.6, 0.65, 0.4]} rotation={[0, 0, 0.2]} color="#004400" size={0.04} /> 
+                <PointsShape geometry={new BoxGeometry(0.2, 0.05, 0.4)} position={[-0.6, 0.65, 0.4]} rotation={[0, 0, -0.2]} color="#004400" size={0.04} />
+            </group>
+            <group position={[0, -0.4, 0.2]} rotation={[0.2, 0, 0]} ref={jawRef}>
+                <PointsShape geometry={new CylinderGeometry(0.4, 0.6, 1.6, 12, 8)} position={[0, 0, 1.0]} rotation={[1.57, 0, 0]} color={detailColor} {...materialProps} />
+                <PointsShape geometry={new BoxGeometry(0.7, 0.1, 1.3, 8, 2, 8)} position={[0, 0.2, 1.0]} color={gumColor} size={0.04} />
+                <PointsShape geometry={new CylinderGeometry(0.25, 0.1, 1.0, 8, 5)} position={[0, 0.35, 0.8]} rotation={[1.6, 0, 0]} color={tongueColor} size={0.05} />
+                <group position={[0, 0.3, 1.1]}>
+                    <TeethRow count={7} radius={0.4} color={teethColor} inverted={true} />
+                </group>
+
+                {/* --- FIRE BREATH --- */}
+                <DinoBreath breathStatus={breathStatus} />
+
+            </group>
+          </group>
+
+          <PointsShape geometry={new CylinderGeometry(0.9, 1.3, 1.8, 20, 12)} position={[0, 2.8, 1.2]} rotation={[-0.3, 0, 0]} color={skinColor} {...materialProps} />
+
+          <group position={[0, 1, 0]}>
+            <PointsShape geometry={new SphereGeometry(1.6, 28, 24)} position={[0, 1, 0.2]} scale={[1, 1, 0.9]} color={skinColor} {...materialProps} />
+            <PointsShape geometry={new SphereGeometry(1.8, 28, 28)} position={[0, -0.5, -0.2]} scale={[1.1, 1.2, 1.1]} color={skinColor} {...materialProps} />
+          </group>
+
+          <group position={[0, -0.5, -1.5]} rotation={[-0.1, 0, 0]}>
+             <group ref={tailBaseRef}>
+                 <PointsShape geometry={new CylinderGeometry(1.3, 0.9, 1.8, 16, 12)} position={[0, 0, -0.9]} rotation={[1.57, 0, 0]} color={skinColor} {...materialProps} />
+                 <group position={[0, 0, -1.8]} ref={tailMidRef}>
+                    <PointsShape geometry={new CylinderGeometry(0.9, 0.5, 2.0, 14, 10)} position={[0, 0, -1.0]} rotation={[1.57, 0, 0]} color={skinColor} {...materialProps} />
+                    <group position={[0, 0, -2.0]} ref={tailTipRef}>
+                        <PointsShape geometry={new CylinderGeometry(0.5, 0.05, 2.5, 10, 12)} position={[0, 0, -1.25]} rotation={[1.57, 0, 0]} color={skinColor} {...materialProps} />
+                    </group>
+                 </group>
+             </group>
+          </group>
+
+          <group position={[0, 1.5, 1.2]}>
+             <group position={[1, 0, 0]} ref={leftArmRef}>
+                 <PointsShape geometry={new CylinderGeometry(0.25, 0.2, 1.5, 8, 8)} position={[0, -0.75, 0]} rotation={[0, 0, -0.2]} color={detailColor} {...materialProps} />
+                 <ThreeToedClaw position={[0, -1.6, 0.1]} color={clawColor} scale={0.5} />
+             </group>
+             <group position={[-1, 0, 0]} ref={rightArmRef}>
+                 <PointsShape geometry={new CylinderGeometry(0.25, 0.2, 1.5, 8, 8)} position={[0, -0.75, 0]} rotation={[0, 0, 0.2]} color={detailColor} {...materialProps} />
+                 <ThreeToedClaw position={[0, -1.6, 0.1]} color={clawColor} scale={0.5} />
+             </group>
+          </group>
+      </group>
+
+      <group position={[0, -1.5, 0]}>
+        <group position={[1.1, 0.5, 0]} ref={leftLegRef}>
+            <PointsShape geometry={new SphereGeometry(1.2, 16, 16)} scale={[0.8, 1.4, 1]} color={skinColor} {...materialProps} />
+            <group position={[0, -1.2, 0.5]}>
+                 <PointsShape geometry={new CylinderGeometry(0.5, 0.4, 1.8, 12, 8)} position={[0, -0.5, 0]} rotation={[0.2, 0, 0]} color={skinColor} {...materialProps} />
+                 <ThreeToedClaw position={[0, -1.5, 0.3]} rotation={[0.2, 0, 0]} color={clawColor} scale={0.8} />
+            </group>
+        </group>
+        <group position={[-1.1, 0.5, 0]} ref={rightLegRef}>
+            <PointsShape geometry={new SphereGeometry(1.2, 16, 16)} scale={[0.8, 1.4, 1]} color={skinColor} {...materialProps} />
+            <group position={[0, -1.2, 0.5]}>
+                 <PointsShape geometry={new CylinderGeometry(0.5, 0.4, 1.8, 12, 8)} position={[0, -0.5, 0]} rotation={[0.2, 0, 0]} color={skinColor} {...materialProps} />
+                 <ThreeToedClaw position={[0, -1.5, 0.3]} rotation={[0.2, 0, 0]} color={clawColor} scale={0.8} />
+            </group>
+        </group>
+      </group>
+
+    </group>
+  );
+};
+
+const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
+  const groupRef = useRef<Group>(null);
+  const leftLegRef = useRef<Group>(null);
+  const rightLegRef = useRef<Group>(null);
+  const leftArmRef = useRef<Group>(null);
+  const rightArmRef = useRef<Group>(null);
+  const jawRef = useRef<Group>(null); 
+  const upperJawRef = useRef<Group>(null);
+  const tailBaseRef = useRef<Group>(null);
+  const tailMidRef = useRef<Group>(null);
+  const tailTipRef = useRef<Group>(null);
+
+  const { input } = useInput();
+  const { camera, controls } = useThree();
+  const [position] = useState(new Vector3(0, 0, 10)); 
+
+  // --- Breath Status Ref (Shared between Player and DinoBreath) ---
+  const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0, isRoaring: false });
+
+  // --- [可修改] 恐龍移動速度 (Speed) ---
+  const speed = 2.0;
+  // --- [可修改] 恐龍旋轉速度 (Rotation) ---
+  const rotationSpeed = 0.1;
+
+  const prevPosition = useRef(position.clone());
+
+  // --- [可修改] 連結觸發位置 ---
+  const altarPos = new Vector3(0, 8, -110);      
+  const monumentPos = new Vector3(-30, 8, -105); 
+  const debrisPos = new Vector3(30, 8, -105);    
+
+  useFrame((state) => {
+    if (!groupRef.current || isLocked) return;
+
+    let moveForward = 0;
+    let moveTurn = 0;
+
+    if (input.forward) moveForward += 1;
+    if (input.backward) moveForward -= 1;
+    if (input.left) moveTurn += 1;
+    if (input.right) moveTurn -= 1;
+
+    if (Math.abs(joystickState.y) > 0.1 || Math.abs(joystickState.x) > 0.1) {
+      moveForward = joystickState.y;
+      moveTurn = -joystickState.x;
+    }
+
+    groupRef.current.rotation.y += moveTurn * rotationSpeed;
+    const direction = new Vector3(0, 0, -1);
+    direction.applyAxisAngle(new Vector3(0, 1, 0), groupRef.current.rotation.y);
+    
+    if (moveForward !== 0) {
+      const newPos = position.clone().addScaledVector(direction, moveForward * speed);
+      if (newPos.x > 35) newPos.x = 35;
+      if (newPos.x < -35) newPos.x = -35;
+      if (newPos.z > 15) newPos.z = 15;
+      if (newPos.z < -125) newPos.z = -125;
+      position.copy(newPos);
+    }
+
+    const stairStartZ = -5;
+    const stairEndZ = -25;
+    const topY = 8;
+    
+    if (position.z < stairStartZ && position.z > stairEndZ) {
+      const ratio = (position.z - stairStartZ) / (stairEndZ - stairStartZ);
+      position.y = MathUtils.lerp(0, topY, ratio);
+    } else if (position.z <= stairEndZ) {
+        position.y = topY;
+    } else {
+        position.y = 0;
+    }
+
+    const time = state.clock.getElapsedTime();
+    const isMoving = Math.abs(moveForward) > 0.1 || Math.abs(moveTurn) > 0.1;
+    
+    const bobFreq = 10;
+    const bobAmp = 0.15;
+    const bob = isMoving ? Math.sin(time * bobFreq) * bobAmp : Math.sin(time * 1.5) * 0.02;
+    
+    const targetTilt = isMoving ? moveForward * 0.2 : 0;
+    groupRef.current.rotation.x = MathUtils.lerp(groupRef.current.rotation.x, targetTilt, 0.1);
+    groupRef.current.rotation.z = MathUtils.lerp(groupRef.current.rotation.z, moveTurn * -0.1, 0.1);
+    // --- JAW LOGIC (SYNCED) ---
+    const mouthFireOpen = breathStatus.current.isFiring;
+    const mouthRoarOpen = !breathStatus.current.isFiring && breathStatus.current.isMouthOpen;
+    const defaultJawRot = isMoving ? 0.4 + Math.sin(time * 8) * 0.15 : 0.2 + Math.sin(time * 2) * 0.05;
+    let lowerTarget = defaultJawRot;
+    if (mouthFireOpen) lowerTarget = MOUTH_CONFIG.fireOpen;
+    else if (mouthRoarOpen) lowerTarget = MOUTH_CONFIG.roarOpen;
+    if (jawRef.current) {
+        const speedFactor = lowerTarget > jawRef.current.rotation.x ? MOUTH_CONFIG.openSpeed : MOUTH_CONFIG.closeSpeed;
+        jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, lowerTarget, speedFactor);
+        breathStatus.current.mouthAngle = jawRef.current.rotation.x;
+    }
+    if (upperJawRef.current) {
+        let upperTarget = 0.05;
+        if (mouthFireOpen) upperTarget = MOUTH_CONFIG.upperFireOpen;
+        else if (mouthRoarOpen) upperTarget = MOUTH_CONFIG.upperRoarOpen;
+        const speedFactorTop = upperTarget < upperJawRef.current.rotation.x ? MOUTH_CONFIG.openSpeed : MOUTH_CONFIG.closeSpeed;
+        upperJawRef.current.rotation.x = MathUtils.lerp(upperJawRef.current.rotation.x, upperTarget, speedFactorTop);
+    }
+
+    if (leftLegRef.current && rightLegRef.current) {
+        if (isMoving) {
+            const walkCycle = time * 10; 
+            const strideAngle = 0.6; 
+            leftLegRef.current.rotation.x = Math.sin(walkCycle) * strideAngle;
+            rightLegRef.current.rotation.x = Math.sin(walkCycle + Math.PI) * strideAngle;
+        } else {
+            leftLegRef.current.rotation.x = MathUtils.lerp(leftLegRef.current.rotation.x, 0, 0.1);
+            rightLegRef.current.rotation.x = MathUtils.lerp(rightLegRef.current.rotation.x, 0, 0.1);
+        }
+    }
+
+    if (tailBaseRef.current && tailMidRef.current && tailTipRef.current) {
+        // Softer tail: slower sway, slightly larger amplitude
+        const tailSpeed = isMoving ? 6 : 1.2;
+        const tailAmp = isMoving ? 0.25 : 0.12;
+        tailBaseRef.current.rotation.y = Math.sin(time * tailSpeed) * tailAmp;
+        tailMidRef.current.rotation.y = Math.sin(time * tailSpeed - 0.5) * tailAmp;
+        tailTipRef.current.rotation.y = Math.sin(time * tailSpeed - 1.0) * tailAmp;
+    }
+
+    if (leftArmRef.current && rightArmRef.current) {
+        leftArmRef.current.rotation.x = -0.5 + Math.sin(time * 3) * 0.1;
+        rightArmRef.current.rotation.x = -0.5 + Math.cos(time * 3) * 0.1;
+    }
+
+    groupRef.current.position.copy(position);
+    groupRef.current.position.y += bob + 2.7; 
+
+    const moveDelta = position.clone().sub(prevPosition.current);
+    if(moveDelta.lengthSq() > 0.00001) {
+        camera.position.add(moveDelta);
+        if(controls) {
+             const orbit = controls as unknown as OrbitControlsImpl;
+             orbit.target.add(moveDelta);
+             orbit.update();
+        }
+    }
+    prevPosition.current.copy(position);
+
+    if (checkTrigger(position, altarPos, 12)) {
+      onTrigger("https://www.zhenggdove.com/exhibition");
+    }
+    if (checkTrigger(position, monumentPos, 12)) {
+      onTrigger("https://www.zhenggdove.com/bio");
+    }
+    if (checkTrigger(position, debrisPos, 12)) {
+      onTrigger("https://www.zhenggdove.com/projects");
+    }
+  });
+
+  return (
+    <group ref={groupRef} name="PlayerGroup">
+      <TRexModel 
+        leftLegRef={leftLegRef} 
+        rightLegRef={rightLegRef}
+        leftArmRef={leftArmRef}
+        rightArmRef={rightArmRef}
+        jawRef={jawRef}
+        upperJawRef={upperJawRef}
+        tailBaseRef={tailBaseRef}
+        tailMidRef={tailMidRef}
+        tailTipRef={tailTipRef}
+        breathStatus={breathStatus}
+      />
+    </group>
+  );
+};
+
+export default Player;
+    </script>
+
+    <!-- FILE: components/WorldEnvironment.tsx -->
+    <script type="text/plain" id="vfs-WorldEnvironment">
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+import { CatmullRomCurve3, Vector3, Color, MathUtils } from 'three';
+
+// --- Material Definitions (Must be at top) ---
+const FireMaterial = {
+  uniforms: {
+    uTime: { value: 0 },
+    uColor: { value: new THREE.Color(1.0, 0.5, 0.0) },
+  },
+  vertexShader: `
+    uniform float uTime;
+    attribute float aOffset;
+    attribute float aSpeed;
+    varying float vAlpha;
+    
+    void main() {
+      vec3 pos = position;
+      float height = 15.0; 
+      float y = mod(pos.y + uTime * aSpeed + aOffset, height);
+      pos.y = y;
+      pos.x += sin(uTime * 2.0 + aOffset + y * 0.2) * (0.5 + y * 0.1);
+      pos.z += cos(uTime * 1.5 + aOffset + y * 0.2) * (0.5 + y * 0.1);
+
+      vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+      gl_Position = projectionMatrix * mvPosition;
+      gl_PointSize = 200.0 / -mvPosition.z; 
+      
+      vAlpha = 1.0 - pow(y / height, 2.0); 
+      if(vAlpha < 0.0) vAlpha = 0.0;
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 uColor;
+    varying float vAlpha;
+    
+    void main() {
+      vec2 coord = gl_PointCoord - vec2(0.5);
+      float dist = length(coord);
+      if(dist > 0.5) discard;
+      float glow = 1.0 - (dist * 2.0);
+      gl_FragColor = vec4(uColor, vAlpha * glow);
+    }
+  `
+};
+
+const GenericPointShader = {
+    vertexShader: `
+        attribute float size;
+        attribute vec3 customColor;
+        varying vec3 vColor;
+        void main() {
+            vColor = customColor;
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = size * (400.0 / -mvPosition.z);
+            gl_Position = projectionMatrix * mvPosition;
+        }
+    `,
+    fragmentShader: `
+        varying vec3 vColor;
+        void main() {
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            if(length(coord) > 0.5) discard;
+            gl_FragColor = vec4(vColor, 1.0);
+        }
+    `
+};
+
+// --- GLOBAL CONFIGURATION (EDIT HERE) ---
+export const PLANET_CONFIG = {
+  position: { x: 250, y: -250, z: 0 },    
+  radius: 200,                            
+  planetColor: "#ffe733",                 
+  planetOuterPointCount: 10000,           
+  planetInnerPointCount: 300000,          
+  altarColor: "#91041c",       
+  altarConeColor: "#ff0066",   
+  skyPlanetPosition: { x: 200, y: 250, z: -100 }, 
+  skyPlanetRadius: 200,                           
+  skyPlanetColor: "#91041c",                      
+  skyPlanetOuterCount: 38000,                     
+  skyPlanetInnerCount: 50000,
+  leftPlanetPosition: { x: 0, y: 20, z: 400 }, 
+  leftPlanetRadius: 100,
+  leftPlanetColor: "#00ccff",
+  leftPlanetNebulaColor: "#00ffff",
+  leftPlanetPointCount: 40000,
+  tentacleCount: 500,           // CHANGED TO 150 to be visible
+  tentacleRootColor: "#4D0000", 
+  tentacleTipColor1: "#4D0000", 
+  tentacleTipColor2: "#4D0000", 
+  tentacleRadiusMin: 4,         // CHANGED TO 4-12
+  tentacleRadiusMax: 2,        
+  tentacleBaseLength: 5,       
+  tentacleLengthJitter: 20      
+};
+
+// --- CRITICAL FIX: Ensure pointsPerRing is 30 (not 0) ---
+const BASE_DENSITY = { pointsPerRing: 30 }; 
+
+const PointsObj = ({ geometry, position, rotation, color, size, opacity = 1 }: any) => {
+    return (
+        <points position={position} rotation={rotation}>
+            <primitive object={geometry} attach="geometry" />
+            <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={opacity} />
+        </points>
+    );
+};
+
+const ShaderFire = ({ position, color, count = 400, height = 10, width = 3, speedMult = 1 }: any) => {
+    const meshRef = useRef<THREE.Points>(null);
+    const [geoAttributes] = useState(() => {
+        const pos = new Float32Array(count * 3);
+        const offsets = new Float32Array(count);
+        const speeds = new Float32Array(count);
+        for(let i=0; i<count; i++) {
+            pos[i*3] = (Math.random() - 0.5) * width;
+            pos[i*3+1] = Math.random() * height; 
+            pos[i*3+2] = (Math.random() - 0.5) * width;
+            offsets[i] = Math.random() * 10;
+            speeds[i] = (1.0 + Math.random()) * speedMult;
+        }
+        return { pos, offsets, speeds };
+    });
+
+    useFrame((state) => {
+        if(meshRef.current) {
+            const material = meshRef.current.material as THREE.ShaderMaterial;
+            material.uniforms.uTime.value = state.clock.getElapsedTime();
+        }
+    });
+
+    return (
+        <points position={position} ref={meshRef}>
+            <bufferGeometry>
+                <bufferAttribute attach="attributes-position" count={count} array={geoAttributes.pos} itemSize={3} />
+                <bufferAttribute attach="attributes-aOffset" count={count} array={geoAttributes.offsets} itemSize={1} />
+                <bufferAttribute attach="attributes-aSpeed" count={count} array={geoAttributes.speeds} itemSize={1} />
+            </bufferGeometry>
+            <shaderMaterial 
+                vertexShader={FireMaterial.vertexShader}
+                fragmentShader={FireMaterial.fragmentShader}
+                uniforms={{ uTime: { value: 0 }, uColor: { value: color } }}
+                transparent
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+            />
+        </points>
+    )
+}
+
+interface PlanetProps {
+  color?: string;
+  outerCount?: number;
+  innerCount?: number;
+  size?: number;
+  rotationSpeed?: number;
+  noiseAmplitude?: number;
+}
+
+const Planet: React.FC<PlanetProps> = ({ 
+  color = '#00F0FF', 
+  outerCount = 15000,
+  innerCount = 0, 
+  size = 2.8, 
+  rotationSpeed = 0.1, 
+  noiseAmplitude = 0.12 
+}) => {
+  const pointsRef = useRef<THREE.Points>(null);
+  
+  const particles = useMemo(() => {
+    const totalCount = outerCount + innerCount;
+    const tempPositions = new Float32Array(totalCount * 3);
+    const phi = Math.PI * (3 - Math.sqrt(5)); 
+
+    let pIndex = 0;
+    for (let i = 0; i < outerCount; i++) {
+      const y = 1 - (i / (outerCount - 1)) * 2; 
+      const radiusAtY = Math.sqrt(1 - y * y);   
+      const theta = phi * i;                    
+      const x = Math.cos(theta) * radiusAtY;
+      const z = Math.sin(theta) * radiusAtY;
+      const noise = 1 + (Math.random() - 0.5) * noiseAmplitude;
+      tempPositions[pIndex * 3] = x * size * noise;
+      tempPositions[pIndex * 3 + 1] = y * size * noise;
+      tempPositions[pIndex * 3 + 2] = z * size * noise;
+      pIndex++;
+    }
+    for (let i = 0; i < innerCount; i++) {
+        const r = size * Math.cbrt(Math.random()) * 0.95;
+        const theta = Math.random() * Math.PI * 2;
+        const phiAng = Math.acos(2 * Math.random() - 1);
+        const x = r * Math.sin(phiAng) * Math.cos(theta);
+        const y = r * Math.sin(phiAng) * Math.sin(theta);
+        const z = r * Math.cos(phiAng);
+        tempPositions[pIndex * 3] = x;
+        tempPositions[pIndex * 3 + 1] = y;
+        tempPositions[pIndex * 3 + 2] = z;
+        pIndex++;
+    }
+    return tempPositions;
+  }, [outerCount, innerCount, size, noiseAmplitude]);
+
+  useFrame((state, delta) => {
+    if (pointsRef.current) {
+      pointsRef.current.rotation.y += rotationSpeed * delta;
+      pointsRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.15) * 0.05;
+    }
+  });
+
+  return (
+    <group>
+      <points ref={pointsRef}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={particles.length / 3}
+            array={particles}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          size={0.6}                   
+          color={color}                
+          sizeAttenuation={true}       
+          transparent={true}
+          opacity={0.8}
+          blending={THREE.AdditiveBlending} 
+          depthWrite={false}
+        />
+      </points>
+      <mesh>
+        <sphereGeometry args={[size * 0.9, 32, 32]} />
+        <meshBasicMaterial color="#000000" />
+      </mesh>
+    </group>
+  );
+};
+
+const NebulaPlanet = ({ position, radius, color, nebulaColor, pointCount }: any) => {
+    const nebulaRef = useRef<THREE.Points>(null);
+
+    const nebulaPoints = useMemo(() => {
+        const count = 20000;
+        const pos = new Float32Array(count * 3);
+        const ringRadius = radius * 1.8;
+        const ringWidth = radius * 0.8;
+
+        for(let i=0; i<count; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const r = ringRadius + (Math.random()-0.5) * ringWidth;
+            const x = r * Math.cos(theta);
+            const z = r * Math.sin(theta);
+            const y = (Math.random()-0.5) * (radius * 0.5);
+            pos[i*3] = x;
+            pos[i*3+1] = y;
+            pos[i*3+2] = z;
+        }
+        return pos;
+    }, [radius]);
+
+    useFrame((state) => {
+        if(nebulaRef.current) {
+            nebulaRef.current.rotation.y += 0.001;
+            nebulaRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.1) * 0.1;
+        }
+    });
+
+    return (
+        <group position={position}>
+            <Planet 
+                size={radius} 
+                outerCount={pointCount} 
+                innerCount={pointCount} 
+                color={color} 
+                rotationSpeed={0.02} 
+                noiseAmplitude={0.05}
+            />
+            <points ref={nebulaRef}>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" count={nebulaPoints.length/3} array={nebulaPoints} itemSize={3} />
+                </bufferGeometry>
+                <pointsMaterial size={0.4} color={nebulaColor} sizeAttenuation transparent opacity={0.5} blending={THREE.AdditiveBlending} depthWrite={false} />
+            </points>
+        </group>
+    )
+}
+
+const WorldEnvironment = () => {
+  const stairCount = 40;
+  const stairWidth = 80; 
+  const stairDepth = 0.5;
+  const stairHeight = 0.2;
+
+  const stairs = useMemo(() => {
+    const items = [];
+    for (let i = 0; i < stairCount; i++) {
+      items.push(
+        <PointsObj
+          key={`stair-${i}`}
+          geometry={new THREE.BoxGeometry(stairWidth, stairHeight, stairDepth, 150, 4, 8)}
+          position={[0, i * stairHeight, -5 - i * stairDepth]}
+          color={i % 5 === 0 ? "#00ffcc" : "#111122"}
+          size={0.06}
+          opacity={0.9}
+        />
+      );
+    }
+    return items;
+  }, []);
+
+  const { x, y, z } = PLANET_CONFIG.position;
+  const corePlanetPos = [-z, y, -x];
+  const { x: sx, y: sy, z: sz } = PLANET_CONFIG.skyPlanetPosition;
+  const skyPlanetPos = [-sz, sy, -sx];
+  const { x: lx, y: ly, z: lz } = PLANET_CONFIG.leftPlanetPosition;
+  const leftPlanetPos = [-lz, ly, -lx];
+
+  return (
+    <group>
+      <group>
+         <group position={corePlanetPos as any}>
+            <Planet 
+                size={PLANET_CONFIG.radius} 
+                outerCount={PLANET_CONFIG.planetOuterPointCount}
+                innerCount={PLANET_CONFIG.planetInnerPointCount}
+                color={PLANET_CONFIG.planetColor}
+                rotationSpeed={0.02}
+                noiseAmplitude={0.05}
+            />
+         </group>
+         <BiologicalTentacleSystem />
+      </group>
+
+      <group position={skyPlanetPos as any}>
+          <Planet 
+              size={PLANET_CONFIG.skyPlanetRadius}
+              outerCount={PLANET_CONFIG.skyPlanetOuterCount}
+              innerCount={PLANET_CONFIG.skyPlanetInnerCount}
+              color={PLANET_CONFIG.skyPlanetColor}
+              rotationSpeed={-0.05} 
+              noiseAmplitude={0.08}
+          />
+          <pointLight distance={200} intensity={2} color={PLANET_CONFIG.skyPlanetColor} />
+      </group>
+
+      <NebulaPlanet 
+        position={leftPlanetPos}
+        radius={PLANET_CONFIG.leftPlanetRadius}
+        color={PLANET_CONFIG.leftPlanetColor}
+        nebulaColor={PLANET_CONFIG.leftPlanetNebulaColor}
+        pointCount={PLANET_CONFIG.leftPlanetPointCount}
+      />
+
+      <group>{stairs}</group>
+
+      <group position={[0, 7.8, -75]}>
+         <PointsObj 
+            geometry={new THREE.BoxGeometry(80, 1, 100, 200, 6, 200)} 
+            position={[0, 0, 0]} 
+            color="#222255" 
+            size={0.06}
+            opacity={1}
+         />
+      </group>
+
+      <group position={[0, 8, -110]}>
+         <HyperSpireAltar />
+      </group>
+
+      <group position={[-30, 20, -105]} rotation={[0, 0.6, 0]}>
+        <HyperGlitchMonolith />
+      </group>
+
+      <group position={[30, 8, -105]}>
+         <HyperBurningDebris />
+      </group>
+    </group>
+  );
+};
+
+const generateRingedPoints = (curve: CatmullRomCurve3, numRings: number, pointsPerRing: number, baseRadius: number, rootColor: Color, tipColor: Color) => {
+    const points = [];
+    const sizes = [];
+    const colors = [];
+    const normal = new THREE.Vector3();
+    const binormal = new THREE.Vector3();
+    const tangent = new THREE.Vector3();
+    const tempColor = new THREE.Color();
+    const frames = curve.computeFrenetFrames(numRings, false);
+
+    for (let i = 0; i < numRings; i++) {
+      const u = i / (numRings - 1);
+      curve.getPointAt(u, tangent);
+      normal.copy(frames.normals[i]);
+      binormal.copy(frames.binormals[i]);
+
+      const pos = curve.getPointAt(u, new THREE.Vector3());
+      const currentRadius = baseRadius * (1.0 - u * 0.7); 
+      tempColor.copy(rootColor).lerp(tipColor, u);
+
+      for (let j = 0; j < pointsPerRing; j++) {
+        const angle = (j / pointsPerRing) * Math.PI * 2;
+        const sin = Math.sin(angle), cos = Math.cos(angle);
+
+        const px = pos.x + currentRadius * (normal.x * cos + binormal.x * sin);
+        const py = pos.y + currentRadius * (normal.y * cos + binormal.y * sin);
+        const pz = pos.z + currentRadius * (normal.z * cos + binormal.z * sin);
+
+        points.push(px, py, pz);
+        sizes.push(0.3 + Math.random() * 0.3); 
+        colors.push(tempColor.r, tempColor.g, tempColor.b);
+      }
+    }
+    return { points, sizes, colors };
+};
+
+const BiologicalTentacleSystem = () => {
+    const groupRef = useRef<THREE.Group>(null);
+    const tentsRef = useRef<any[]>([]);
+
+    const pX = PLANET_CONFIG.position.x;
+    const pY = PLANET_CONFIG.position.y;
+    const pZ = PLANET_CONFIG.position.z;
+    const pRadius = PLANET_CONFIG.radius;
+    const tCount = PLANET_CONFIG.tentacleCount;
+    const tRadMin = PLANET_CONFIG.tentacleRadiusMin;
+    const tRadMax = PLANET_CONFIG.tentacleRadiusMax;
+    const tBaseLen = PLANET_CONFIG.tentacleBaseLength;
+    const tJitter = PLANET_CONFIG.tentacleLengthJitter;
+    const tRootCol = PLANET_CONFIG.tentacleRootColor;
+    const tTipCol1 = PLANET_CONFIG.tentacleTipColor1;
+    const tTipCol2 = PLANET_CONFIG.tentacleTipColor2;
+
+    useEffect(() => {
+        if (!groupRef.current) return;
+        
+        while(groupRef.current.children.length > 0){ 
+            const child = groupRef.current.children[0];
+            if(child instanceof THREE.Points) {
+                child.geometry.dispose();
+                // @ts-ignore
+                if(child.material.dispose) child.material.dispose();
+            }
+            groupRef.current.remove(child); 
+        }
+        tentsRef.current = [];
+
+        const planetCenter = new Vector3(-pZ, pY, -pX);
+        const planetRadius = pRadius;
+        
+        if (tCount <= 0) return; 
+
+        for (let t = 0; t < tCount; t++) {
+             const theta = Math.random() * Math.PI * 2; 
+             const phi = Math.acos(2 * Math.random() - 1);
+
+             const x = planetRadius * Math.sin(phi) * Math.cos(theta);
+             const y = planetRadius * Math.sin(phi) * Math.sin(theta);
+             const z = planetRadius * Math.cos(phi);
+                
+             const startPos = new Vector3(
+                planetCenter.x + x,
+                planetCenter.y + y,
+                planetCenter.z + z
+             );
+
+             const pathPoints = [];
+             const length = tBaseLen + Math.random() * tJitter;
+             const numSegments = Math.max(10, Math.floor(length / 2)); 
+
+             const dir = startPos.clone().sub(planetCenter).normalize(); 
+             dir.x += (Math.random() - 0.5) * 0.5;
+             dir.y += (Math.random() - 0.5) * 0.5;
+             dir.z += (Math.random() - 0.5) * 0.5;
+             dir.normalize();
+
+             for(let i=0; i<numSegments; i++) {
+                 const p = startPos.clone().add(dir.clone().multiplyScalar(i * (length/numSegments)));
+                 p.x += (Math.random()-0.5) * (length * 0.05); 
+                 p.z += (Math.random()-0.5) * (length * 0.05);
+                 pathPoints.push(p);
+             }
+             
+             const curve = new CatmullRomCurve3(pathPoints);
+             const rootColor = new Color(tRootCol); 
+             const tipColor = new Color(Math.random() > 0.5 ? tTipCol1 : tTipCol2);
+             const tentacleRadius = tRadMin + Math.random() * (tRadMax - tRadMin);
+             const dynamicRings = Math.max(30, Math.floor(length * 2));
+
+             const { points, sizes, colors } = generateRingedPoints(curve, dynamicRings, BASE_DENSITY.pointsPerRing, tentacleRadius, rootColor, tipColor);
+             
+             const geo = new THREE.BufferGeometry();
+             geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(points), 3));
+             geo.setAttribute('size', new THREE.BufferAttribute(new Float32Array(sizes), 1));
+             geo.setAttribute('customColor', new THREE.BufferAttribute(new Float32Array(colors), 3));
+
+             const mat = new THREE.ShaderMaterial({
+                 vertexShader: GenericPointShader.vertexShader,
+                 fragmentShader: GenericPointShader.fragmentShader,
+                 blending: THREE.AdditiveBlending,
+                 depthTest: false,
+                 transparent: true
+             });
+
+             const mesh = new THREE.Points(geo, mat);
+             groupRef.current.add(mesh);
+
+             tentsRef.current.push({
+                 mesh,
+                 curve,
+                 pathPoints,
+                 rootColor,
+                 tipColor,
+                 radius: tentacleRadius,
+                 dynamicRings, 
+                 length: length, 
+                 seed: Math.random() * 1000,
+                 speed: 0.3 + Math.random() * 0.5
+             });
+        }
+    }, [pX, pY, pZ, pRadius, tCount, tRadMin, tRadMax, tBaseLen, tJitter, tRootCol, tTipCol1, tTipCol2]); 
+
+    useFrame((state) => {
+        const time = state.clock.getElapsedTime();
+        
+        tentsRef.current.forEach(tent => {
+             const { curve, pathPoints, seed, speed, mesh, radius, dynamicRings, length } = tent;
+             for(let i=1; i<pathPoints.length; i++) {
+                 const rest = pathPoints[i];
+                 const amp = (i / pathPoints.length) * (length * 0.1); 
+                 const t = time * speed + i * 0.15;
+                 const nx = Math.sin(t + seed);
+                 const ny = Math.cos(t * 1.2 + seed);
+                 const nz = Math.sin(t * 0.8 + seed);
+                 curve.points[i].x = rest.x + nx * amp;
+                 curve.points[i].y = rest.y + ny * amp;
+                 curve.points[i].z = rest.z + nz * amp;
+             }
+
+             const { points } = generateRingedPoints(curve, dynamicRings, BASE_DENSITY.pointsPerRing, radius, tent.rootColor, tent.tipColor);
+             
+             const posAttr = mesh.geometry.attributes.position;
+             if (posAttr.array.length === points.length) {
+                for(let k=0; k<points.length; k++) {
+                    posAttr.array[k] = points[k];
+                }
+                posAttr.needsUpdate = true;
+             }
+        });
+    });
+
+    return <group ref={groupRef} />;
+};
+
+const HyperSpireAltar = () => {
+    const groupRef = useRef<THREE.Group>(null);
+    const baseColor = PLANET_CONFIG.altarColor;
+    const coneColor = PLANET_CONFIG.altarConeColor;
+
+    const rings = useMemo(() => {
+        return [0, 1, 2, 3, 4].map(i => ({
+            radius: 6 + i * 2,
+            speed: (i % 2 === 0 ? 1 : -1) * (0.1 + i * 0.05),
+            tilt: i * 0.1
+        }));
+    }, []);
+
+    useFrame((state) => {
+        const t = state.clock.getElapsedTime();
+        if(groupRef.current) {
+            groupRef.current.children.forEach((child, i) => {
+                if (child.userData.isRing) {
+                    const r = rings[child.userData.index];
+                    child.rotation.y = t * r.speed;
+                    child.rotation.x = Math.sin(t * 0.5 + r.tilt) * 0.2;
+                }
+            });
+        }
+    });
+
+  return (
+    <group ref={groupRef}>
+      <PointsObj geometry={new THREE.CylinderGeometry(10, 15, 4, 100, 10)} position={[0, 2, 0]} color="#440055" size={0.06} />
+      <PointsObj geometry={new THREE.CylinderGeometry(8, 10, 2, 100, 5)} position={[0, 5, 0]} color="#660077" size={0.05} />
+      <PointsObj geometry={new THREE.CylinderGeometry(4, 8, 30, 64, 50, true)} position={[0, 15, 0]} color="#8800ff" size={0.04} opacity={0.6} />
+      <PointsObj geometry={new THREE.CylinderGeometry(1, 1, 80, 24, 150, true)} position={[0, 40, 0]} color={baseColor} size={0.06} opacity={0.9} />
+      <PointsObj geometry={new THREE.CylinderGeometry(0.2, 0.2, 80, 12, 50, true)} position={[0, 40, 0]} color="#ffffff" size={0.08} opacity={1} />
+
+      {rings.map((r, i) => (
+          <points key={i} position={[0, 12 + i * 2, 0]} userData={{ isRing: true, index: i }}>
+             <primitive object={new THREE.TorusGeometry(r.radius, 0.2, 16, 120)} attach="geometry" />
+             <pointsMaterial size={0.1} color={i===4 ? coneColor : baseColor} transparent opacity={0.8} blending={THREE.AdditiveBlending} />
+          </points>
+      ))}
+
+      {Array.from({length: 20}).map((_, i) => (
+          <PointsObj 
+            key={`shard-${i}`}
+            geometry={new THREE.OctahedronGeometry(1 + Math.random(), 0)}
+            position={[Math.sin(i)*15, 10 + Math.random()*20, Math.cos(i)*15]}
+            color={coneColor}
+            size={0.05}
+          />
+      ))}
+
+      <PointsObj 
+        geometry={new THREE.ConeGeometry(4, 10, 4, 40, true)} 
+        position={[0, 25, 0]} 
+        color={coneColor} 
+        size={0.05} 
+        opacity={1} 
+      />
+      
+      <group position={[0, 18, 0]}>
+        <RefinedEye />
+      </group>
+      
+      <pointLight position={[0, 20, 0]} distance={80} intensity={10} color={baseColor} />
+    </group>
+  );
+};
+
+const RefinedEye = () => {
+    const irisRef = useRef<THREE.Group>(null);
+    useFrame((state) => {
+        if(irisRef.current) irisRef.current.rotation.z = state.clock.getElapsedTime() * 0.5;
+    });
+    return (
+        <group scale={[3, 3, 3]} rotation={[0, 0, 0]}>
+            <PointsObj geometry={new THREE.SphereGeometry(0.3, 32, 32)} color="#000000" size={0.02} />
+            <group ref={irisRef}>
+                <PointsObj geometry={new THREE.RingGeometry(0.35, 0.9, 64, 16)} color="#00ff99" size={0.02} opacity={1} />
+                <PointsObj geometry={new THREE.RingGeometry(0.5, 0.7, 64, 5)} position={[0,0,0.01]} color="#ffffff" size={0.01} opacity={0.5} />
+            </group>
+        </group>
+    )
+}
+
+const HyperGlitchMonolith = () => {
+    const [glitchFactor, setGlitch] = useState(0);
+    const groupRef = useRef<THREE.Group>(null);
+
+    useFrame((state) => {
+        if (Math.random() > 0.92) setGlitch(Math.random());
+        else setGlitch(MathUtils.lerp(glitchFactor, 0, 0.1));
+        
+        if(groupRef.current) {
+            groupRef.current.rotation.y += 0.005;
+        }
+    });
+
+    const monolithPoints = useMemo(() => {
+        const blocks = [];
+        for(let b=0; b<5; b++) {
+            const w = 4 + Math.random()*6;
+            const h = 10 + Math.random()*15;
+            const d = 1 + Math.random()*3;
+            const offX = (Math.random()-0.5)*5;
+            const offY = (Math.random()-0.5)*5;
+            
+            for(let i=0; i<1000; i++) {
+                const px = (Math.random()-0.5)*w + offX;
+                const py = (Math.random()-0.5)*h + offY;
+                const pz = (Math.random()-0.5)*d;
+                blocks.push(px, py, pz);
+            }
+        }
+        return new Float32Array(blocks);
+    }, []);
+
+    return (
+        <group ref={groupRef}>
+            <points>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" count={monolithPoints.length/3} array={monolithPoints} itemSize={3} />
+                </bufferGeometry>
+                <pointsMaterial 
+                    color={new THREE.Color().setHSL(0.6, 1, 0.5 + glitchFactor * 0.5)} 
+                    size={0.08 + glitchFactor * 0.1} 
+                    sizeAttenuation 
+                    transparent 
+                    opacity={0.8} 
+                />
+            </points>
+            
+            <points rotation={[0.5, 0, 0]}>
+                 <primitive object={new THREE.TorusGeometry(12, 0.5, 16, 100)} attach="geometry" />
+                 <pointsMaterial size={0.05} color="#00ffff" transparent opacity={0.3} />
+            </points>
+
+             <PointsObj 
+                geometry={new THREE.PlaneGeometry(12, 25, 50, 80)} 
+                position={[0, 0, 0]} 
+                color="#ffffff" 
+                size={glitchFactor > 0.5 ? 0.08 : 0.0} 
+                opacity={glitchFactor * 0.6}
+            />
+            <pointLight position={[0, 5, 4]} distance={40} intensity={8 + glitchFactor * 10} color="#00ccff" />
+        </group>
+    );
+};
+
+const HyperBurningDebris = () => {
+    const papers = useMemo(() => {
+        const arr = [];
+        for(let i=0; i<150; i++) {
+            const angle = Math.random() * Math.PI;
+            const px = (Math.random() - 0.5) * 20; 
+            const pz = (Math.random() - 0.5) * 20;
+            const lift = Math.random() * 2;
+            arr.push(
+                <group key={i} position={[px, 0.1 + lift, pz]} rotation={[Math.random()*1, angle, Math.random()*0.5]}>
+                    <PointsObj 
+                        geometry={new THREE.PlaneGeometry(1.2, 1.6, 12, 16)} 
+                        rotation={[-Math.PI/2, 0, 0]} 
+                        color={Math.random() > 0.8 ? "#ffaa00" : "#dddddd"} 
+                        size={0.03} 
+                    />
+                </group>
+            )
+        }
+        return arr;
+    }, []);
+
+    const columns = useMemo(() => {
+        return [-6, 6, -3].map((offX, i) => (
+             <group key={`col-${i}`} position={[offX, 2, (Math.random()-0.5)*10]} rotation={[0.2, 0, (Math.random()-0.5)]}>
+                  <PointsObj geometry={new THREE.CylinderGeometry(1.5, 2, 6, 20, 10)} color="#555555" size={0.05} />
+             </group>
+        ));
+    }, []);
+
+    return (
+        <group>
+            {papers}
+            {columns}
+            <ShaderFire position={[0, 0.5, 0]} color={new THREE.Color("#ff5500")} count={5000} height={18} width={8} />
+            <ShaderFire position={[5, 0.5, 3]} color={new THREE.Color("#ff3300")} count={3000} height={12} width={5} />
+            <ShaderFire position={[-4, 0.5, -4]} color={new THREE.Color("#ffaa00")} count={3000} height={15} width={6} />
+            <ShaderFire position={[0, 15, 0]} color={new THREE.Color("#ffff00")} count={2000} height={30} width={15} speedMult={3} />
+            <pointLight position={[0, 8, 0]} distance={60} intensity={12} color="#ff4400" />
+        </group>
+    )
+}
+
+export default WorldEnvironment;
+    </script>
+
+    <!-- FILE: components/Scene.tsx -->
+    <script type="text/plain" id="vfs-Scene">
+import React, { useRef, useState } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import { Environment as DreiEnv, Text3D, Center, MeshDistortMaterial } from '@react-three/drei';
+import Player from 'Player';
+import WorldEnvironment from 'WorldEnvironment';
+import * as THREE from 'three';
+
+export const LABEL_DATA = [
+    { text: "Exhibition", position: [0, 30, -110] }, 
+    { text: "CV", position: [-30, 27, -105] },       
+    { text: "Things", position: [30, 27, -105] }     
+];
+
+interface SceneProps {
+  onTrigger: (url: string) => void;
+  isLocked: boolean;
+}
+
+const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
+  return (
+    <>
+      <ambientLight intensity={0.2} />
+      <pointLight position={[10, 10, 10]} intensity={0.5} color="#00ffff" />
+      <pointLight position={[-10, 15, -10]} intensity={0.5} color="#ff00ff" />
+      <fog attach="fog" args={['#050505', 150, 1500]} />
+      <Player onTrigger={onTrigger} isLocked={isLocked} />
+      <WorldEnvironment />
+      <ChromeLabelSystem />
+      <DreiEnv preset="night" />
+    </>
+  );
+};
+
+const ChromeLabelSystem = () => {
+    const { scene } = useThree();
+    return (
+        <group>
+            {LABEL_DATA.map((l, i) => (
+                <ChromeLabel key={i} text={l.text} position={l.position as [number, number, number]} scene={scene} />
+            ))}
+        </group>
+    )
+}
+
+const ChromeLabel = ({ text, position, scene }: { text: string, position: [number, number, number], scene: THREE.Scene }) => {
+    const ref = useRef<THREE.Group>(null);
+    const [opacity, setOpacity] = useState(0);
+
+    useFrame((state) => {
+        if (!ref.current) return;
+        const player = scene.getObjectByName('PlayerGroup');
+        if (player) {
+            const labelPos = new THREE.Vector3(...position);
+            const flatPlayerPos = new THREE.Vector3(player.position.x, 0, player.position.z);
+            const flatLabelPos = new THREE.Vector3(labelPos.x, 0, labelPos.z);
+            const dist = flatPlayerPos.distanceTo(flatLabelPos);
+            const targetOpacity = THREE.MathUtils.clamp(1 - (dist - 30) / 30, 0, 1);
+            setOpacity(THREE.MathUtils.lerp(opacity, targetOpacity, 0.1));
+        }
+        ref.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 1.5) * 0.5;
+        ref.current.lookAt(state.camera.position);
+    });
+
+    return (
+        <group position={position} ref={ref} visible={opacity > 0.01}>
+            <Center>
+                <Text3D 
+                    font="https://threejs.org/examples/fonts/optimer_bold.typeface.json"
+                    size={5}
+                    height={0.5}
+                    curveSegments={12}
+                    bevelEnabled
+                    bevelThickness={0.8} 
+                    bevelSize={0.15}     
+                    bevelOffset={0}
+                    bevelSegments={3}   
+                >
+                    {text}
+                    <MeshDistortMaterial
+                        color="#ffffff"
+                        metalness={1.0}
+                        roughness={0.0}
+                        envMapIntensity={2.0}
+                        distort={0.4} 
+                        speed={3}    
+                        transparent
+                        opacity={opacity}
+                    />
+                </Text3D>
+            </Center>
+        </group>
+    )
+}
+
+export default Scene;
+    </script>
+
+    <!-- FILE: App.tsx -->
+    <script type="text/plain" id="vfs-App">
+import React, { useState, Suspense } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls, Stars, Loader } from '@react-three/drei';
+import Scene from 'Scene';
+import UIOverlay from 'UIOverlay';
+
+export default function App() {
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+  const [isFading, setIsFading] = useState(false);
+
+  const handleTrigger = (url: string) => {
+    if (isFading) return;
+    setRedirectUrl(url);
+    setIsFading(true);
+    setTimeout(() => {
+      window.location.href = url;
+    }, 2000);
+  };
+
+  return (
+    <div className="app-container">
+      <Canvas
+        camera={{ position: [0, 15, 30], fov: 50 }}
+        dpr={[1, 2]}
+        gl={{ antialias: true, alpha: false }}
+      >
+        <color attach="background" args={['#050011']} />
+        <Suspense fallback={null}>
+          <Scene onTrigger={handleTrigger} isLocked={isFading} />
+          <Stars radius={100} depth={50} count={6000} factor={4} saturation={1} fade speed={2} />
+        </Suspense>
+        <OrbitControls makeDefault enableZoom={true} enablePan={false} /> 
+      </Canvas>
+      <UIOverlay isFading={isFading} />
+      <Loader />
+    </div>
+  );
+}
+    </script>
+
+    <!-- FILE: index.tsx -->
+    <script type="text/plain" id="vfs-index">
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from 'App';
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+    </script>
+
+    <!-- ========================================== -->
+    <!-- LOADERS & INIT LOGIC -->
+    <!-- ========================================== -->
+    <script>
+      function rewriteImports(code) {
+        return code.replace(/from\s+['"](\..*?)['"]/g, (match, path) => {
+          const parts = path.split('/');
+          const name = parts[parts.length - 1].split('.')[0];
+          return `from '${name}'`;
+        });
+      }
+
+      async function init() {
+        try {
+          const blobUrls = {};
+          const files = ['useInput', 'UIOverlay', 'WorldEnvironment', 'Player', 'Scene', 'App', 'index'];
+          
+          for (const name of files) {
+            const rawCode = document.getElementById('vfs-' + name).textContent;
+            const cleanCode = rewriteImports(rawCode);
+            const result = Babel.transform(cleanCode, {
+              presets: ['react', 'typescript'],
+              filename: name + '.tsx'
+            });
+            const blob = new Blob([result.code], { type: 'text/javascript' });
+            blobUrls[name] = URL.createObjectURL(blob);
+          }
+
+          const externalImports = {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+            "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.15.16?external=react,react-dom,three",
+            "@react-three/drei": "https://esm.sh/@react-three/drei@9.99.0?external=react,react-dom,three,@react-three/fiber",
+            "three": "https://esm.sh/three@0.161.0",
+            "three-stdlib": "https://esm.sh/three-stdlib@2.29.4?external=three"
+          };
+          
+          const importMap = { imports: { ...externalImports, ...blobUrls } };
+          const mapScript = document.createElement('script');
+          mapScript.type = 'importmap';
+          mapScript.textContent = JSON.stringify(importMap);
+          document.head.appendChild(mapScript);
+
+          const startScript = document.createElement('script');
+          startScript.type = 'module';
+          startScript.textContent = "import 'index';";
+          document.body.appendChild(startScript);
+          
+          document.getElementById('loader').style.display = 'none';
+        } catch (err) {
+          console.error(err);
+          document.getElementById('loader').innerText = "Critical Error: " + err.message;
+          document.getElementById('loader').style.color = "red";
+        }
+      }
+      init();
+    </script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
