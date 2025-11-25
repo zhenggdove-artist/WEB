@@ -524,7 +524,19 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
         fireTimerRef.current = 0;
         fireHoldRef.current = 0;
     }
-    break;
+    // When forceFire is true, skip the state machine and stay firing
+    if (breathStatus.current.forceFire) {
+        breathStatus.current.isFiring = true;
+        breathStatus.current.isMouthOpen = true;
+        breathStatus.current.isRoaring = false;
+        setState('FIRING');
+        fireTimerRef.current = 0;
+        fireHoldRef.current = 0;
+        fadeRef.current = 1;
+        progress.current = Math.min(1, progress.current + delta * BREATH_TIMING.fireGrowSpeed);
+        // Continue to shader update
+    } else {
+    switch (state) {
 
             case 'PRE_FIRE':
                 // Open jaw BEFORE firing
@@ -626,6 +638,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 }
                 break;
         }
+    }
 
         // Update Shader
         if (meshRef.current) {
