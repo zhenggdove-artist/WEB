@@ -25,10 +25,10 @@ interface ChickensProps {
 
 // --- 小雞行為參數（可在此調整） ---
 const CHICKEN_COUNT = 5; // 小雞數量
-const BASE_HEIGHT = 8.0; // 頂平台高度基準（略抬高避免穿透）
+const BASE_HEIGHT = 8.5; // 頂平台高度基準（更高便於看見）
 const AREA_X = 32; // 活動範圍 X 半徑
-const AREA_Z_MIN = -120; // 活動範圍 Z 最小（靠近祭壇區）
-const AREA_Z_MAX = -60; // 活動範圍 Z 最大（靠近樓梯上方）
+const AREA_Z_MIN = -80; // 活動範圍 Z 最小（靠近平台中央）
+const AREA_Z_MAX = -45; // 活動範圍 Z 最大（靠近樓梯上方）
 const WANDER_SPEED = 1.2; // 遊走速度
 const CHASE_SPEED = 2.2; // 追擊速度
 const ALERT_RADIUS = 14; // 轉為追擊的警戒距離
@@ -41,7 +41,7 @@ const FIRE_PADDING = 0.2; // 火焰判定緩衝
 const createInitialChickens = (): ChickenState[] => {
   // 固定初始位置讓進入場景時一定能看到（平台中央一字排開）
   const startXs = [-12, -6, 0, 6, 12];
-  const startZ = -100; // 靠近祭壇區，玩家抬頭即可看到
+  const startZ = -60; // 靠近平台中央，玩家上樓即可看到
   return Array.from({ length: CHICKEN_COUNT }).map((_, i) => ({
     position: new THREE.Vector3(
       startXs[i % startXs.length] + (Math.random() - 0.5) * 1.5,
@@ -173,33 +173,34 @@ const ChickenModel = ({ stateRef, index }: { stateRef: React.MutableRefObject<Ch
   });
 
   return (
-    <group ref={groupRef} frustumCulled={false} scale={[2.2, 2.2, 2.2]}>
+    <group ref={groupRef} frustumCulled={false} scale={[3, 3, 3]}>
       <group ref={liveRef}>
-        <PointsShape geometry={new THREE.BoxGeometry(1.4, 1.2, 1.2, 8, 8, 8)} position={[0, 0.8, 0]} color="#ffffff" size={0.18} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.9, 0.8, 0.9, 6, 6, 6)} position={[0, 1.7, 0.4]} color="#f9f9f9" size={0.18} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.4, 0.2, 1.0, 3, 1, 6)} position={[0, 1.2, -0.6]} color="#ededed" size={0.14} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(1.4, 1.2, 1.2, 8, 8, 8)} position={[0, 0.8, 0]} color="#ffffff" size={0.25} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.9, 0.8, 0.9, 6, 6, 6)} position={[0, 1.7, 0.4]} color="#f9f9f9" size={0.25} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.4, 0.2, 1.0, 3, 1, 6)} position={[0, 1.2, -0.6]} color="#ededed" size={0.2} sizeAttenuation={false} />
         {/* Wings */}
-        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[0.85, 1.0, -0.1]} rotation={[0, 0, -0.4]} color="#ececec" size={0.14} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[-0.85, 1.0, -0.1]} rotation={[0, 0, 0.4]} color="#ececec" size={0.14} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[0.85, 1.0, -0.1]} rotation={[0, 0, -0.4]} color="#ececec" size={0.2} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[-0.85, 1.0, -0.1]} rotation={[0, 0, 0.4]} color="#ececec" size={0.2} sizeAttenuation={false} />
         {/* Legs */}
-        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[0.35, 0.2, -0.05]} color="#ffae52" size={0.14} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[-0.35, 0.2, -0.05]} color="#ffae52" size={0.14} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[0.35, -0.2, 0.05]} color="#ffae52" size={0.14} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[-0.35, -0.2, 0.05]} color="#ffae52" size={0.14} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[0.35, 0.2, -0.05]} color="#ffae52" size={0.2} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[-0.35, 0.2, -0.05]} color="#ffae52" size={0.2} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[0.35, -0.2, 0.05]} color="#ffae52" size={0.2} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[-0.35, -0.2, 0.05]} color="#ffae52" size={0.2} sizeAttenuation={false} />
         {/* Head + Face */}
-        <PointsShape geometry={new THREE.ConeGeometry(0.2, 0.5, 3)} position={[0, 1.6, 1.0]} rotation={[Math.PI / 2, 0, 0]} color="#ffb347" size={0.18} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[0.25, 1.75, 0.55]} color="#111111" size={0.18} materialRef={leftEyeMat} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[-0.25, 1.75, 0.55]} color="#111111" size={0.18} materialRef={rightEyeMat} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.ConeGeometry(0.2, 0.5, 3)} position={[0, 1.6, 1.0]} rotation={[Math.PI / 2, 0, 0]} color="#ffb347" size={0.25} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[0.25, 1.75, 0.55]} color="#111111" size={0.25} materialRef={leftEyeMat} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[-0.25, 1.75, 0.55]} color="#111111" size={0.25} materialRef={rightEyeMat} sizeAttenuation={false} />
         {/* Comb */}
-        <PointsShape geometry={new THREE.SphereGeometry(0.15, 6, 6)} position={[0, 2.05, 0.2]} color="#ff4466" size={0.16} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[0.15, 2.0, 0.0]} color="#ff4466" size={0.16} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[-0.15, 2.0, 0.0]} color="#ff4466" size={0.16} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.15, 6, 6)} position={[0, 2.05, 0.2]} color="#ff4466" size={0.22} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[0.15, 2.0, 0.0]} color="#ff4466" size={0.22} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[-0.15, 2.0, 0.0]} color="#ff4466" size={0.22} sizeAttenuation={false} />
       </group>
       <group ref={drumstickRef} visible={false}>
-        <PointsShape geometry={new THREE.SphereGeometry(0.9, 12, 12)} position={[0, 0.2, 0]} scale={[1.4, 0.8, 1.0]} color="#c47a2c" size={0.18} opacity={1} materialRef={drumstickMat} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 8, 1)} position={[0, 0.9, 0]} color="#ffffff" size={0.18} opacity={1} materialRef={boneMat} sizeAttenuation={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.18, 8, 8)} position={[0, 1.35, 0]} color="#ffffff" size={0.18} opacity={1} materialRef={boneMat} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.9, 12, 12)} position={[0, 0.2, 0]} scale={[1.4, 0.8, 1.0]} color="#c47a2c" size={0.25} opacity={1} materialRef={drumstickMat} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 8, 1)} position={[0, 0.9, 0]} color="#ffffff" size={0.25} opacity={1} materialRef={boneMat} sizeAttenuation={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.18, 8, 8)} position={[0, 1.35, 0]} color="#ffffff" size={0.25} opacity={1} materialRef={boneMat} sizeAttenuation={false} />
       </group>
+      <pointLight position={[0, 2.5, 0]} intensity={6} distance={25} color="#ffeeaa" />
     </group>
   );
 };
