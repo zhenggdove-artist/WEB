@@ -221,9 +221,9 @@ import * as THREE from 'three';
 
 // --- [可修改] 恐龍火焰噴射長度與設定 ---
 const BREATH_CONFIG = {
-    length: 6.0,       // 火焰噴射的最大距離 (長度)
+    length: 12.0,       // 火焰噴射的最大距離 (長度)
     speed: 90,        // 火焰粒子的飛行速度 (提高以加快水平噴射)
-    spread: 1.3,        // 火焰擴散的寬度 (錐形角度)
+    spread: 3,        // 火焰擴散的寬度 (錐形角度)
     particleSize: 0.1,  // 每個火焰點的大小
     offset: { x: 0, y: 1, z: 1.2 } // 發射點相對於下顎的位置
 };
@@ -259,8 +259,8 @@ const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
 };
 
 // --- 火焰設定（可調整） ---
-const FIRE_HIT_RADIUS = 4.8; // 火焰碰撞半徑（向下擴大以碰到小雞）
-const FIRE_VISUAL_LENGTH = 6; // 火焰視覺長度
+const FIRE_HIT_RADIUS = 4; // 火焰碰撞半徑（向下擴大以碰到小雞）
+const FIRE_VISUAL_LENGTH = 12; // 火焰視覺長度
 
 const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity = 1 }: any) => {
     return (
@@ -495,7 +495,13 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 fadeRef.current = 0;
                 fireHoldRef.current = 0;
                 firePlanRef.current = false;
-                if (time > nextTriggerTime.current) {
+                if (breathStatus.current.manualFire) {
+                    firePlanRef.current = true;
+                    setState('PRE_FIRE');
+                    timerRef.current = 0;
+                    fireTimerRef.current = 0;
+                    fireHoldRef.current = 0;
+                } else if (time > nextTriggerTime.current) {
                     firePlanRef.current = Math.random() < BREATH_TIMING.fireProbability;
                     setState('PRE_FIRE');
                     timerRef.current = 0; // Reset local timer
@@ -505,15 +511,15 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 break;
 
             case 'PRE_FIRE':
-                // Open jaw BEFORE firing
                 breathStatus.current.isMouthOpen = true; 
                 breathStatus.current.isFiring = false; 
                 breathStatus.current.isRoaring = !firePlanRef.current;
                 timerRef.current += delta;
-                if (timerRef.current > BREATH_TIMING.preFireDelay) { // Wait preFireDelay seconds
-                    if (firePlanRef.current) {
+                const preDelay = breathStatus.current.manualFire ? FIRE_MOUTH_DELAY : BREATH_TIMING.preFireDelay;
+                if (timerRef.current > preDelay) {
+                    if (firePlanRef.current || breathStatus.current.manualFire) {
                         setState('FIRING');
-                        progress.current = 0.0; // CRITICAL RESET: Start animation from 0
+                        progress.current = 0.0;
                         fireHoldRef.current = 0;
                         fireTimerRef.current = 0;
                         fadeRef.current = 1;
@@ -1707,13 +1713,13 @@ const AREA_X = 30;             // 活動範圍 X 半徑
 const AREA_Z_MIN = -90;        // 活動範圍 Z 最小
 const AREA_Z_MAX = -55;        // 活動範圍 Z 最大
 const WANDER_SPEED = 2.2;      // 遊走速度（加快）
-const CHASE_SPEED = 3.2;       // 追擊速度（加快）
-const ALERT_RADIUS = 18;       // 警戒半徑（眼睛轉紅並追擊）
+const CHASE_SPEED = 6.2;       // 追擊速度（加快）
+const ALERT_RADIUS = 20;       // 警戒半徑（眼睛轉紅並追擊）
 const HIT_RADIUS = 2.2;        // 撞擊主角半徑
-const HOP_HEIGHT = 0.6;        // 彈跳高度
+const HOP_HEIGHT = 0.9;        // 彈跳高度
 const HOP_SPEED = 5.0;         // 彈跳頻率
-const DRUMSTICK_DURATION = 5;  // 雞腿停留秒數（逐漸消失）
-const CHICKEN_SCALE = 0.9;     // 小雞整體縮放（原本 3，現在縮小為 30% 的 0.9）
+const DRUMSTICK_DURATION = 10;  // 雞腿停留秒數（逐漸消失）
+const CHICKEN_SCALE = 1.3;     // 小雞整體縮放（原本 3，現在縮小為 30% 的 0.9）
 
 type Mode = 'wander' | 'chase' | 'drumstick';
 interface Chick {
