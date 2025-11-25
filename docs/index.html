@@ -201,9 +201,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
         onTouchStart={handleFireDown}
         onTouchEnd={handleFireUp}
         aria-label="Fire"
-      >
-        🔥
-      </button>
+      />
     </>
   );
 };
@@ -612,7 +610,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
 
 const TRexModel: React.FC<any> = ({ 
     leftLegRef, rightLegRef, leftArmRef, rightArmRef, jawRef, upperJawRef,
-    tailBaseRef, tailMidRef, tailTipRef, breathStatus 
+    tailBaseRef, tailMidRef, tailTipRef, breathStatus, hitFlash 
 }) => {
   const skinColor = "#00ff66"; 
   const detailColor = "#00cc44";
@@ -625,7 +623,7 @@ const TRexModel: React.FC<any> = ({
     size: 0.05, 
     sizeAttenuation: true,
     transparent: true,
-    opacity: 0.9,
+    opacity: hitFlash ? 0.0 : 0.9, // 碰撞時暫時隱藏綠色點
   };
 
   return (
@@ -725,6 +723,7 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
   const fireRef = useRef<Group>(null);
   const tmpForward = useRef(new Vector3(0, 0, -1));
   const mouthWorld = useRef(new Vector3());
+  const hitFlashTimer = useRef<NodeJS.Timeout | null>(null);
 
   const { input } = useInput();
   const { camera, controls } = useThree();
@@ -892,8 +891,6 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
 
   return (
     <group ref={groupRef} name="PlayerGroup">
-      {hitFlash && <FlashAura />}
-      <FireBreath fireRef={fireRef} />
       <TRexModel 
         leftLegRef={leftLegRef} 
         rightLegRef={rightLegRef}
@@ -905,7 +902,9 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
         tailMidRef={tailMidRef}
         tailTipRef={tailTipRef}
         breathStatus={breathStatus}
+        hitFlash={hitFlash}
       />
+      <FireBreath fireRef={fireRef} />
     </group>
   );
 };
