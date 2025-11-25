@@ -1700,6 +1700,7 @@ interface Chick {
   alert: boolean;
   drumTime: number;
   opacity: number;
+  collected?: boolean;
 }
 
 const createInitialChicks = (): Chick[] => {
@@ -1829,8 +1830,8 @@ const ChickenModel = ({ data, index }: { data: React.MutableRefObject<Chick[]>; 
       </group>
       <group ref={drum} visible={false}>
         <PointsShape geometry={new THREE.SphereGeometry(0.9, 16, 16)} position={[0, 0.2, 0]} scale={[1.4, 0.8, 1.0]} color="#c47a2c" size={0.14} opacity={1} materialRef={drumMat} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 12, 3)} position={[0, 0.9, 0]} color="#ffffff" size={0.14} opacity={1} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.18, 12, 12)} position={[0, 1.35, 0]} color="#ffffff" size={0.14} opacity={1} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 12, 3)} position={[0.8, 0.9, 0]} rotation={[0,0,1.57]} color="#ffffff" size={0.14} opacity={1} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.18, 12, 12)} position={[1.25, 1.35, 0]} color="#ffffff" size={0.14} opacity={1} sizeAttenuation={false} depthTest={false} />
       </group>
       <pointLight position={[0, 2.5, 0]} intensity={6} distance={25} color="#ffeeaa" />
     </group>
