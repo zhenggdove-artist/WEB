@@ -45,6 +45,7 @@ export const useInput = () => {
     backward: false,
     left: false,
     right: false,
+    fire: false,
     joystickX: 0,
     joystickY: 0,
   });
@@ -68,6 +69,10 @@ export const useInput = () => {
         case 'ArrowRight':
           setInput((prev) => ({ ...prev, right: true }));
           break;
+        case 'Space':
+        case 'KeyJ':
+          setInput((prev) => ({ ...prev, fire: true }));
+          break;
       }
     };
 
@@ -88,6 +93,10 @@ export const useInput = () => {
         case 'KeyD':
         case 'ArrowRight':
           setInput((prev) => ({ ...prev, right: false }));
+          break;
+        case 'Space':
+        case 'KeyJ':
+          setInput((prev) => ({ ...prev, fire: false }));
           break;
       }
     };
@@ -328,6 +337,34 @@ const BlinkingEyes = ({ position }: { position: [number, number, number] }) => {
         </group>
     )
 }
+
+const HeartStack = ({ count }: { count: number }) => {
+    const ref = useRef<Group>(null);
+    useFrame((state) => {
+        if (!ref.current) return;
+        ref.current.rotation.y = state.clock.getElapsedTime() * 1.2;
+        ref.current.position.y = 6 + Math.sin(state.clock.getElapsedTime() * 2) * 0.1;
+    });
+    if (count <= 0) return null;
+    return (
+      <group ref={ref} position={[0, 6, 0]} frustumCulled={false}>
+        {Array.from({ length: count }).map((_, i) => (
+          <HeartIcon key={i} position={[0, i * 0.6, 0]} />
+        ))}
+      </group>
+    );
+};
+
+const HeartIcon = ({ position }: { position: [number, number, number] }) => {
+    const color = "#ff1fb2";
+    return (
+      <group position={position} scale={[0.7, 0.7, 0.7]}>
+        <PointsShape geometry={new SphereGeometry(0.25, 10, 10)} position={[0.15, 0.1, 0]} color={color} size={0.05} opacity={0.9} />
+        <PointsShape geometry={new SphereGeometry(0.25, 10, 10)} position={[-0.15, 0.1, 0]} color={color} size={0.05} opacity={0.9} />
+        <PointsShape geometry={new ConeGeometry(0.35, 0.55, 12)} position={[0, -0.15, 0]} rotation={[Math.PI, 0, 0]} color={color} size={0.05} opacity={0.9} />
+      </group>
+    );
+};
 
 // --- DYNAMIC FIRE BREATH SYSTEM ---
 
@@ -708,7 +745,7 @@ const TRexModel: React.FC<any> = ({
   );
 };
 
-const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
+const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false, heartCount = 0 }) => {
   const groupRef = useRef<Group>(null);
   const leftLegRef = useRef<Group>(null);
   const rightLegRef = useRef<Group>(null);
@@ -867,6 +904,7 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
       mouthWorld.current.clone().addScaledVector(tmpForward.current, 3),
       mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH),
       mouthWorld.current.clone().addScaledVector(tmpForward.current, 2).add(new Vector3(0, -2, 0)),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 2.2).add(new Vector3(0, -6, 0)),
     ];
     playerFireState.active = firing;
     playerFireState.centers = fireTargets;
@@ -898,6 +936,7 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
         breathStatus={breathStatus}
         hitFlash={hitFlash}
       />
+      <HeartStack count={heartCount} />
     </group>
   );
 };
@@ -1663,7 +1702,7 @@ export default WorldEnvironment;
 export const playerFireState = {
   active: false,
   centers: [],
-  radius: 1.6,
+  radius: 3.2,
 };
     </script>
 
@@ -1688,8 +1727,13 @@ const HOP_HEIGHT = 0.9;        // 彈跳高度
 const HOP_SPEED = 5.0;         // 彈跳頻率
 const DRUMSTICK_DURATION = 10;  // 雞腿停留秒數（逐漸消失）
 const CHICKEN_SCALE = 1.3;     // 小雞整體縮放（原本 3，現在縮小為 30% 的 0.9）
+const DRUMSTICK_PICKUP_RADIUS = 1.8; // 撿雞腿判定半徑
+const RESPAWN_DELAY = 3; // 雞腿消失或撿取後再生延遲秒數
+const FOOT_FIRE_HALF_X = 4; // 腳下 AoE X 半徑
+const FOOT_FIRE_HALF_Z = 4; // 腳下 AoE Z 半徑
+const FOOT_FIRE_HEIGHT = 3; // 腳下 AoE Y 容差
 
-type Mode = 'wander' | 'chase' | 'drumstick';
+type Mode = 'wander' | 'chase' | 'drumstick' | 'respawn';
 interface Chick {
   pos: THREE.Vector3;
   vel: THREE.Vector3;
@@ -1701,6 +1745,7 @@ interface Chick {
   drumTime: number;
   opacity: number;
   collected?: boolean;
+  respawnTimer: number;
 }
 
 const createInitialChicks = (): Chick[] => {
@@ -1718,10 +1763,11 @@ const createInitialChicks = (): Chick[] => {
     alert: false,
     drumTime: 0,
     opacity: 1,
+    respawnTimer: 0,
   }));
 };
 
-const Chickens: React.FC<{ onPlayerHit?: () => void }> = ({ onPlayerHit }) => {
+const Chickens: React.FC<{ onPlayerHit?: () => void; onDrumstickCollected?: () => void }> = ({ onPlayerHit, onDrumstickCollected }) => {
   const { scene } = useThree();
   const chickens = useRef<Chick[]>(createInitialChicks());
 
@@ -1730,10 +1776,45 @@ const Chickens: React.FC<{ onPlayerHit?: () => void }> = ({ onPlayerHit }) => {
     const playerPos = player ? player.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 8, -70);
 
     chickens.current.forEach((c) => {
+      if (c.mode === 'respawn') {
+        c.respawnTimer += delta;
+        if (c.respawnTimer >= RESPAWN_DELAY) {
+          c.pos.set(
+            (Math.random() - 0.5) * AREA_X * 1.6,
+            BASE_HEIGHT,
+            THREE.MathUtils.lerp(AREA_Z_MIN, AREA_Z_MAX, Math.random())
+          );
+          c.vel.set(0, 0, 0);
+          c.dir = Math.random() * Math.PI * 2;
+          c.timer = 1 + Math.random() * 1.5;
+          c.hopOff = Math.random() * Math.PI * 2;
+          c.mode = 'wander';
+          c.alert = false;
+          c.drumTime = 0;
+          c.opacity = 1;
+          c.collected = false;
+          c.respawnTimer = 0;
+        }
+        return;
+      }
+
       if (c.mode === 'drumstick') {
         c.drumTime += delta;
         c.opacity = Math.max(0, 1 - c.drumTime / DRUMSTICK_DURATION);
         c.vel.set(0, 0, 0);
+        const pickup = c.pos.distanceTo(playerPos);
+        if (pickup < DRUMSTICK_PICKUP_RADIUS) {
+          c.mode = 'respawn';
+          c.respawnTimer = 0;
+          c.opacity = 0;
+          if (onDrumstickCollected) onDrumstickCollected();
+          return;
+        }
+        if (c.opacity <= 0.01) {
+          c.mode = 'respawn';
+          c.respawnTimer = 0;
+          return;
+        }
       } else {
         const dist = c.pos.distanceTo(playerPos);
         c.alert = dist < ALERT_RADIUS;
@@ -1761,11 +1842,24 @@ const Chickens: React.FC<{ onPlayerHit?: () => void }> = ({ onPlayerHit }) => {
           }
         }
         if (playerFireState.active) {
+          const dx = Math.abs(c.pos.x - playerPos.x);
+          const dz = Math.abs(c.pos.z - playerPos.z);
+          const dy = Math.abs(c.pos.y - playerPos.y);
+          if (dx <= FOOT_FIRE_HALF_X && dz <= FOOT_FIRE_HALF_Z && dy <= FOOT_FIRE_HEIGHT) {
+            c.mode = 'drumstick';
+            c.drumTime = 0;
+            c.opacity = 1;
+            c.respawnTimer = 0;
+            c.vel.set(0, 0, 0);
+            c.pos.y = BASE_HEIGHT;
+            return;
+          }
           for (const center of playerFireState.centers) {
             if (center.distanceTo(c.pos) < playerFireState.radius) {
               c.mode = 'drumstick';
               c.drumTime = 0;
               c.opacity = 1;
+              c.respawnTimer = 0;
               break;
             }
           }
@@ -1798,7 +1892,7 @@ const ChickenModel = ({ data, index }: { data: React.MutableRefObject<Chick[]>; 
     if (c.vel.lengthSq() > 0.001) {
       ref.current.rotation.y = Math.atan2(c.vel.x, c.vel.z);
     }
-    if (live.current) live.current.visible = c.mode !== 'drumstick';
+    if (live.current) live.current.visible = c.mode === 'wander' || c.mode === 'chase';
     if (drum.current) {
       drum.current.visible = c.mode === 'drumstick' && c.opacity > 0.01;
     }
@@ -1873,6 +1967,7 @@ interface SceneProps {
 
 const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
   const [hitFlash, setHitFlash] = useState(false);
+  const [heartCount, setHeartCount] = useState(0);
 
   const handlePlayerHit = () => {
     setHitFlash(true);
@@ -1884,9 +1979,12 @@ const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
       <pointLight position={[10, 10, 10]} intensity={0.5} color="#00ffff" />
       <pointLight position={[-10, 15, -10]} intensity={0.5} color="#ff00ff" />
       <fog attach="fog" args={['#050505', 150, 1500]} />
-      <Player onTrigger={onTrigger} isLocked={isLocked} hitFlash={hitFlash} />
+      <Player onTrigger={onTrigger} isLocked={isLocked} hitFlash={hitFlash} heartCount={heartCount} />
       {/* 小雞點雲群組：固定平台中心，彈跳/遊走/追擊 */}
-      <Chickens onPlayerHit={handlePlayerHit} />
+      <Chickens 
+        onPlayerHit={handlePlayerHit} 
+        onDrumstickCollected={() => setHeartCount((c) => c + 1)} 
+      />
       <WorldEnvironment />
       <ChromeLabelSystem />
       <DreiEnv preset="night" />
