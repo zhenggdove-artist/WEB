@@ -755,7 +755,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
 
   const { input } = useInput();
   const { camera, controls } = useThree();
-  const [position] = useState(new Vector3(0, 60, -50)); 
+  const [position] = useState(new Vector3(0, -60, -50)); 
 
   // --- Breath Status Ref (Shared between Player and DinoBreath) ---
   const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0, isRoaring: false });
