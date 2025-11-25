@@ -1,12 +1,105 @@
-body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #050011; }
-#root { width: 100%; height: 100%; }
-.app-container { position: relative; width: 100%; height: 100%; background-color: #000; }
-.overlay-fade { position: absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; background:#000; z-index:50; transition: opacity 2000ms ease-in-out; opacity:0; }
-.overlay-fade.active { opacity:1; }
-.joystick-wrapper { position:absolute; bottom:48px; left:50%; transform:translateX(-50%); z-index:40; user-select:none; display:block; }
-@media (min-width: 768px) { .joystick-wrapper { display:none; } }
-.joystick-base { width:128px; height:128px; border-radius:50%; border:2px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.2); backdrop-filter:blur(12px); display:flex; align-items:center; justify-content:center; }
-.joystick-stick { width:48px; height:48px; border-radius:50%; background:rgba(34,211,238,0.5); box-shadow:0 0 15px rgba(6,182,212,0.8); border:1px solid rgb(165,243,252); }
-.fire-button { position:absolute; right:18px; bottom:96px; width:40px; height:40px; border-radius:50%; border:1px solid rgba(255,255,255,0.7); outline:1px solid rgba(255,255,255,0.5); background:#e60023; color:#fff; font-size:10px; font-weight:700; box-shadow:0 0 10px rgba(230,0,35,0.8), 0 0 4px rgba(255,255,255,0.6); cursor:pointer; z-index:60; }
-.fire-button:active { transform:scale(0.94); }
-.joystick-wrapper, .fire-button { touch-action: none; }
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #050011;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+.app-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+}
+
+.overlay-fade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-color: #000000;
+  z-index: 50;
+  transition: opacity 2000ms ease-in-out;
+  opacity: 0;
+}
+
+.overlay-fade.active {
+  opacity: 1;
+}
+
+.joystick-wrapper {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  user-select: none;
+  -webkit-user-select: none;
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .joystick-wrapper {
+    display: none;
+  }
+}
+
+.joystick-base {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.joystick-stick {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: rgba(34, 211, 238, 0.5);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.8);
+  border: 1px solid rgb(165, 243, 252);
+}
+
+.fire-button {
+  outline: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 10px rgba(230, 0, 35, 0.8), 0 0 4px rgba(255, 255, 255, 0.5);
+  position: absolute;
+  right: 18px;
+  bottom: 96px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: #e60023;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 60;
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.fire-button:active {
+  transform: scale(0.9);
+  box-shadow: 0 0 14px rgba(255, 120, 73, 1);
+}
+
+@media (min-width: 768px) {
+  .fire-button {
+    right: 28px;
+    bottom: 110px;
+  }
+}

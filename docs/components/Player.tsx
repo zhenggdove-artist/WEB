@@ -4,11 +4,12 @@ import { Vector3, Group, MathUtils, BoxGeometry, SphereGeometry, CylinderGeometr
 import { useInput } from '../hooks/useInput.ts';
 import { joystickState, fireButtonState } from './UIOverlay.tsx';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { playerFireState } from './playerState.ts';
+import { updatePlayerFireState } from './playerState.ts';
 
 interface PlayerProps {
   onTrigger: (url: string) => void;
   isLocked: boolean;
+  hitFlash?: boolean;
 }
 
 // Helper to detect proximity
@@ -16,7 +17,13 @@ const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
   return pos.distanceTo(target) < range;
 };
 
-const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
+// Fire breath configuration
+const FIRE_HIT_RADIUS = 2.4; // Collision radius for flame breath
+const FIRE_VISUAL_LENGTH = 6; // Visual length of the flame cone
+const UP_AXIS = new Vector3(0, 1, 0);
+const FIRE_DROP_OFFSET = new Vector3(0, -2, 0);
+
+const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }) => {
   const groupRef = useRef<Group>(null);
   const leftLegRef = useRef<Group>(null);
   const rightLegRef = useRef<Group>(null);
@@ -27,7 +34,12 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const tailBaseRef = useRef<Group>(null);
   const tailMidRef = useRef<Group>(null);
   const tailTipRef = useRef<Group>(null);
-  const mouthPos = useRef(new Vector3());
+  const fireRef = useRef<Group>(null);
+  const movementDir = useRef(new Vector3(0, 0, -1));
+  const nextPosition = useRef(new Vector3());
+  const movementDelta = useRef(new Vector3());
+  const fireTargetsRef = useRef([new Vector3(), new Vector3(), new Vector3(), new Vector3()]);
+  const fireLookTarget = useRef(new Vector3());
 
   const { input } = useInput();
   const { camera, controls } = useThree();
@@ -42,9 +54,17 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const altarPos = new Vector3(0, 8, -110);
   const monumentPos = new Vector3(-30, 8, -105); 
   const debrisPos = new Vector3(30, 8, -105);   
+  const fireIntensityRef = useRef(0); // 0~1 的火焰強度，用來平滑顯示
+  const tmpForward = useRef(new Vector3(0, 0, -1));
+  const mouthWorld = useRef(new Vector3());
 
   useFrame((state) => {
-    if (!groupRef.current || isLocked) return;
+    if (!groupRef.current) return;
+    if (isLocked) {
+      updatePlayerFireState([], FIRE_HIT_RADIUS, false);
+      if (fireRef.current) fireRef.current.visible = false;
+      return;
+    }
 
     // 1. Input Handling
     let moveForward = 0;
@@ -65,11 +85,11 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     // 2. Movement Physics
     groupRef.current.rotation.y += moveTurn * rotationSpeed;
 
-    const direction = new Vector3(0, 0, -1);
-    direction.applyAxisAngle(new Vector3(0, 1, 0), groupRef.current.rotation.y);
+    movementDir.current.set(0, 0, -1);
+    movementDir.current.applyAxisAngle(UP_AXIS, groupRef.current.rotation.y);
     
     if (moveForward !== 0) {
-      const newPos = position.clone().addScaledVector(direction, moveForward * speed);
+      const newPos = nextPosition.current.copy(position).addScaledVector(movementDir.current, moveForward * speed);
       
       // --- MOVEMENT BOUNDARIES ---
       // Platform/Stair Width is ~80 (Radius 40). Keep inside -35 to 35 for safety.
@@ -117,7 +137,6 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
         // Open jaw slightly when moving (roaring/breathing heavy), or slow breathing when idle
         const targetJawRot = isMoving ? 0.3 + Math.sin(time * 15) * 0.08 : 0.1 + Math.sin(time * 2) * 0.02;
         jawRef.current.rotation.x = MathUtils.lerp(jawRef.current.rotation.x, targetJawRot, 0.1);
-        mouthPos.current.copy(groupRef.current.position).add(new Vector3(0, 4.0, 2.2));
     }
 
     // --- LEG ANIMATION (Bipedal Walk Cycle) ---
@@ -155,25 +174,41 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     groupRef.current.position.y += bob + 2.7; 
 
     // 5. SMART CAMERA FOLLOW (Preserves User Rotation/Zoom)
-    const moveDelta = position.clone().sub(prevPosition.current);
-    if(moveDelta.lengthSq() > 0.00001) {
-        camera.position.add(moveDelta);
+    movementDelta.current.copy(position).sub(prevPosition.current);
+    if(movementDelta.current.lengthSq() > 0.00001) {
+        camera.position.add(movementDelta.current);
         if(controls) {
              const orbit = controls as unknown as OrbitControlsImpl;
-             orbit.target.add(moveDelta);
+             orbit.target.add(movementDelta.current);
              orbit.update();
         }
     }
     prevPosition.current.copy(position);
 
+    // 6. Fire breath targeting and collisions
+    const firing = (input.fire || fireButtonState.pressed) && !isLocked;
+    fireIntensityRef.current = MathUtils.lerp(fireIntensityRef.current, firing ? 1 : 0, firing ? 0.2 : 0.18);
 
-    // Fire toggle (manual)
-    const firingManual = fireButtonState.toggled && !isLocked;
-    playerFireState.active = firingManual;
-    playerFireState.centers = [];
-    playerFireState.radius = 6.0;
+    tmpForward.current.set(0, 0, -1).applyQuaternion(groupRef.current.quaternion).normalize();
+    mouthWorld.current.set(0, 3.8, 2.2).applyMatrix4(groupRef.current.matrixWorld);
 
-    // 6. Triggers (Larger range due to scale)
+    const fireTargets = fireTargetsRef.current;
+    fireTargets[0].copy(mouthWorld.current).addScaledVector(tmpForward.current, 1.5);
+    fireTargets[1].copy(mouthWorld.current).addScaledVector(tmpForward.current, 3);
+    fireTargets[2].copy(mouthWorld.current).addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH);
+    fireTargets[3].copy(mouthWorld.current).addScaledVector(tmpForward.current, 2).add(FIRE_DROP_OFFSET);
+    updatePlayerFireState(fireTargets, FIRE_HIT_RADIUS, fireIntensityRef.current > 0.05);
+
+    if (fireRef.current) {
+      fireRef.current.visible = fireIntensityRef.current > 0.05;
+      fireRef.current.position.copy(mouthWorld.current);
+      fireLookTarget.current.copy(mouthWorld.current).addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH);
+      fireRef.current.lookAt(fireLookTarget.current);
+      const fireScale = 0.8 + fireIntensityRef.current * 0.6;
+      fireRef.current.scale.set(fireScale, fireScale, fireScale);
+    }
+
+    // 7. Triggers (Larger range due to scale)
     if (checkTrigger(position, altarPos, 12)) {
       onTrigger("https://www.zhenggdove.com/exhibition");
     }
@@ -187,6 +222,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
 
   return (
     <group ref={groupRef} name="PlayerGroup">
+      {hitFlash && <FlashAura />}
       <TRexModel 
         leftLegRef={leftLegRef} 
         rightLegRef={rightLegRef}
@@ -197,6 +233,31 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
         tailMidRef={tailMidRef}
         tailTipRef={tailTipRef}
       />
+      <FireBreath fireRef={fireRef} />
+    </group>
+  );
+};
+
+const FlashAura = () => {
+  return (
+    <points>
+      <sphereGeometry args={[3.2, 16, 16]} />
+      <pointsMaterial size={0.18} color="#ff3333" transparent opacity={0.6} />
+    </points>
+  );
+};
+
+const FireBreath = ({ fireRef }: { fireRef: React.RefObject<Group | null> }) => {
+  return (
+    <group ref={fireRef} visible={false}>
+      <points>
+        <coneGeometry args={[0.9, FIRE_VISUAL_LENGTH, 16, 4, true]} />
+        <pointsMaterial size={0.12} color="#ff6b35" transparent opacity={0.65} />
+      </points>
+      <points position={[0, 0, FIRE_VISUAL_LENGTH * 0.35]}>
+        <coneGeometry args={[0.6, FIRE_VISUAL_LENGTH * 0.55, 12, 4, true]} />
+        <pointsMaterial size={0.1} color="#ffd166" transparent opacity={0.55} />
+      </points>
     </group>
   );
 };
@@ -385,3 +446,5 @@ const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity
 }
 
 export default Player;
+
+
