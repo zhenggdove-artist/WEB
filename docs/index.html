@@ -295,8 +295,8 @@ const BREATH_TIMING = {
     preFireDelay: 0.25,      // ????????? (?)
     fireGrowSpeed: 30,      // ?????? (????)
     fadeSpeed: 3.0,          // ?????? (?)
-    fireDuration: 0.6,       // ?????? (?)
-    mouthHoldNoFire: 0.001,   // ?????????????? (?)
+    fireDuration: 1.0,       // 火焰持續時間 (秒)
+    mouthHoldNoFire: 0.2,   // 只張嘴不噴火時維持張開的時間 (秒)
     idleDelayMin: 0.2,       // ?????? (?)
     idleDelayJitter: 0.1,    // ???????? (?)
     fireProbability: 0.6     // ??????????
@@ -843,8 +843,9 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     }
 
     if (tailBaseRef.current && tailMidRef.current && tailTipRef.current) {
-        const tailSpeed = isMoving ? 12 : 2;
-        const tailAmp = isMoving ? 0.15 : 0.05;
+        // Softer tail: slower sway, slightly larger amplitude
+        const tailSpeed = isMoving ? 6 : 1.2;
+        const tailAmp = isMoving ? 0.25 : 0.12;
         tailBaseRef.current.rotation.y = Math.sin(time * tailSpeed) * tailAmp;
         tailMidRef.current.rotation.y = Math.sin(time * tailSpeed - 0.5) * tailAmp;
         tailTipRef.current.rotation.y = Math.sin(time * tailSpeed - 1.0) * tailAmp;
