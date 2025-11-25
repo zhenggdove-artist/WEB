@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { playerActionState } from './playerState.ts';
+import { useEffect } from 'react';
 
 type ChickenMode = 'wander' | 'chase' | 'drumstick';
 
@@ -24,21 +25,21 @@ interface ChickensProps {
 
 // --- 小雞行為參數（可在此調整） ---
 const CHICKEN_COUNT = 5; // 小雞數量
-const BASE_HEIGHT = 8; // 頂平台高度基準
-const AREA_X = 35; // 活動範圍 X 半徑
-const AREA_Z_MIN = -125; // 活動範圍 Z 最小
-const AREA_Z_MAX = -45; // 活動範圍 Z 最大
-const WANDER_SPEED = 1.1; // 遊走速度
+const BASE_HEIGHT = 8.2; // 頂平台高度基準（略抬高避免穿透）
+const AREA_X = 30; // 活動範圍 X 半徑
+const AREA_Z_MIN = -95; // 活動範圍 Z 最小（靠近玩家行進路徑）
+const AREA_Z_MAX = -35; // 活動範圍 Z 最大（靠近樓梯上方）
+const WANDER_SPEED = 1.2; // 遊走速度
 const CHASE_SPEED = 2.2; // 追擊速度
 const ALERT_RADIUS = 14; // 轉為追擊的警戒距離
 const HIT_RADIUS = 2.1; // 撞到主角的距離
-const HOP_HEIGHT = 0.5; // 彈跳幅度
+const HOP_HEIGHT = 0.65; // 彈跳幅度
 const HOP_SPEED = 5.5; // 彈跳頻率
 const DRUMSTICK_DURATION = 5; // 雞腿停留秒數（逐漸消失）
 const FIRE_PADDING = 0.2; // 火焰判定緩衝
 
 const createInitialChickens = (): ChickenState[] => {
-  const centerZ = -80;
+  const centerZ = -60; // 初始集中在靠近玩家視野的區段
   return Array.from({ length: CHICKEN_COUNT }).map(() => ({
     position: new THREE.Vector3(
       (Math.random() - 0.5) * AREA_X * 1.2,
@@ -61,6 +62,10 @@ const Chickens: React.FC<ChickensProps> = ({ onPlayerHit }) => {
   const { scene } = useThree();
   const chickensRef = useRef<ChickenState[]>(createInitialChickens());
   const playerPos = useRef(new THREE.Vector3());
+
+  useEffect(() => {
+    console.log('Chickens spawned:', chickensRef.current.length);
+  }, []);
 
   useFrame((state, delta) => {
     const player = scene.getObjectByName('PlayerGroup') as THREE.Group | null;
@@ -166,32 +171,32 @@ const ChickenModel = ({ stateRef, index }: { stateRef: React.MutableRefObject<Ch
   });
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} frustumCulled={false}>
       <group ref={liveRef}>
-        <PointsShape geometry={new THREE.BoxGeometry(1.4, 1.2, 1.2, 8, 8, 8)} position={[0, 0.8, 0]} color="#f5f5f5" size={0.08} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.9, 0.8, 0.9, 6, 6, 6)} position={[0, 1.7, 0.4]} color="#f9f9f9" size={0.08} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.4, 0.2, 1.0, 3, 1, 6)} position={[0, 1.2, -0.6]} color="#ededed" size={0.07} />
+        <PointsShape geometry={new THREE.BoxGeometry(1.4, 1.2, 1.2, 8, 8, 8)} position={[0, 0.8, 0]} color="#f5f5f5" size={0.12} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.9, 0.8, 0.9, 6, 6, 6)} position={[0, 1.7, 0.4]} color="#f9f9f9" size={0.12} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.4, 0.2, 1.0, 3, 1, 6)} position={[0, 1.2, -0.6]} color="#ededed" size={0.1} />
         {/* Wings */}
-        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[0.85, 1.0, -0.1]} rotation={[0, 0, -0.4]} color="#ececec" size={0.07} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[-0.85, 1.0, -0.1]} rotation={[0, 0, 0.4]} color="#ececec" size={0.07} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[0.85, 1.0, -0.1]} rotation={[0, 0, -0.4]} color="#ececec" size={0.1} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.7, 0.5, 0.3, 4, 3, 2)} position={[-0.85, 1.0, -0.1]} rotation={[0, 0, 0.4]} color="#ececec" size={0.1} />
         {/* Legs */}
-        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[0.35, 0.2, -0.05]} color="#d48a3a" size={0.07} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[-0.35, 0.2, -0.05]} color="#d48a3a" size={0.07} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[0.35, -0.2, 0.05]} color="#d48a3a" size={0.07} />
-        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[-0.35, -0.2, 0.05]} color="#d48a3a" size={0.07} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[0.35, 0.2, -0.05]} color="#d48a3a" size={0.1} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8, 1)} position={[-0.35, 0.2, -0.05]} color="#d48a3a" size={0.1} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[0.35, -0.2, 0.05]} color="#d48a3a" size={0.1} />
+        <PointsShape geometry={new THREE.BoxGeometry(0.3, 0.1, 0.4, 2, 1, 2)} position={[-0.35, -0.2, 0.05]} color="#d48a3a" size={0.1} />
         {/* Head + Face */}
-        <PointsShape geometry={new THREE.ConeGeometry(0.2, 0.5, 3)} position={[0, 1.6, 1.0]} rotation={[Math.PI / 2, 0, 0]} color="#ffb347" size={0.08} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[0.25, 1.75, 0.55]} color="#111111" size={0.09} materialRef={leftEyeMat} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[-0.25, 1.75, 0.55]} color="#111111" size={0.09} materialRef={rightEyeMat} />
+        <PointsShape geometry={new THREE.ConeGeometry(0.2, 0.5, 3)} position={[0, 1.6, 1.0]} rotation={[Math.PI / 2, 0, 0]} color="#ffb347" size={0.12} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[0.25, 1.75, 0.55]} color="#111111" size={0.12} materialRef={leftEyeMat} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.08, 6, 6)} position={[-0.25, 1.75, 0.55]} color="#111111" size={0.12} materialRef={rightEyeMat} />
         {/* Comb */}
-        <PointsShape geometry={new THREE.SphereGeometry(0.15, 6, 6)} position={[0, 2.05, 0.2]} color="#ff4466" size={0.07} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[0.15, 2.0, 0.0]} color="#ff4466" size={0.07} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[-0.15, 2.0, 0.0]} color="#ff4466" size={0.07} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.15, 6, 6)} position={[0, 2.05, 0.2]} color="#ff4466" size={0.1} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[0.15, 2.0, 0.0]} color="#ff4466" size={0.1} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.13, 6, 6)} position={[-0.15, 2.0, 0.0]} color="#ff4466" size={0.1} />
       </group>
       <group ref={drumstickRef} visible={false}>
-        <PointsShape geometry={new THREE.SphereGeometry(0.9, 12, 12)} position={[0, 0.2, 0]} scale={[1.4, 0.8, 1.0]} color="#c47a2c" size={0.08} opacity={1} materialRef={drumstickMat} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 8, 1)} position={[0, 0.9, 0]} color="#ffffff" size={0.08} opacity={1} materialRef={boneMat} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.18, 8, 8)} position={[0, 1.35, 0]} color="#ffffff" size={0.08} opacity={1} materialRef={boneMat} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.9, 12, 12)} position={[0, 0.2, 0]} scale={[1.4, 0.8, 1.0]} color="#c47a2c" size={0.12} opacity={1} materialRef={drumstickMat} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 8, 1)} position={[0, 0.9, 0]} color="#ffffff" size={0.12} opacity={1} materialRef={boneMat} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.18, 8, 8)} position={[0, 1.35, 0]} color="#ffffff" size={0.12} opacity={1} materialRef={boneMat} />
       </group>
     </group>
   );
@@ -217,7 +222,7 @@ const PointsShape = ({
   materialRef?: React.RefObject<THREE.PointsMaterial | null>;
 }) => {
   return (
-    <points position={position} rotation={rotation} scale={scale}>
+    <points position={position} rotation={rotation} scale={scale} frustumCulled={false}>
       <primitive object={geometry} attach="geometry" />
       <pointsMaterial ref={materialRef as any} size={size} color={color} sizeAttenuation transparent opacity={opacity} />
     </points>
