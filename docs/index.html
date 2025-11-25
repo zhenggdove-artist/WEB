@@ -476,7 +476,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
         const time = rState.clock.getElapsedTime();
         
         // --- ANIMATION STATE MACHINE ---
-        switch (state) {
+    switch (state) {
             case 'IDLE':
                 breathStatus.current.isFiring = false;
                 breathStatus.current.isMouthOpen = false;
@@ -485,7 +485,14 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 fadeRef.current = 0;
                 fireHoldRef.current = 0;
                 firePlanRef.current = false;
-                if (time > nextTriggerTime.current) {
+                // 若按下火焰按鈕/鍵則直接進入 FIRING
+                if (breathStatus.current.manualFire) {
+                    setState('FIRING');
+                    progress.current = 0.0;
+                    fireHoldRef.current = 0;
+                    fireTimerRef.current = 0;
+                    fadeRef.current = 1;
+                } else if (time > nextTriggerTime.current) {
                     firePlanRef.current = Math.random() < BREATH_TIMING.fireProbability;
                     setState('PRE_FIRE');
                     timerRef.current = 0; // Reset local timer
@@ -536,13 +543,16 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 if (progress.current >= 1.0) {
                     progress.current = 1.0;
                     fireHoldRef.current += delta;
-                    if (fireHoldRef.current >= BREATH_TIMING.fireDuration || fireTimerRef.current >= 1.0) {
+                    // 手動發火時可長按持續：只有按鍵放開或超時才進入 FADING
+                    const manualHold = breathStatus.current.manualFire;
+                    const shouldFade = !manualHold && (fireHoldRef.current >= BREATH_TIMING.fireDuration || fireTimerRef.current >= 1.0);
+                    if (shouldFade) {
                         timerRef.current = 0;
                         setState('FADING');
                     }
                 }
-                // Hard cap total fire time
-                if (fireTimerRef.current >= 1.0) {
+                // Hard cap total fire time for自動行為
+                if (!breathStatus.current.manualFire && fireTimerRef.current >= 1.0) {
                     fireHoldRef.current = 0;
                 }
                 break;
@@ -560,7 +570,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 if (fireTimerRef.current >= 1.0) {
                     fadeRef.current = 0;
                 }
-                if (fadeRef.current <= 0.01) {
+                if (fadeRef.current <= 0.01 || breathStatus.current.manualFire) {
                     breathStatus.current.isFiring = false;
                     breathStatus.current.isMouthOpen = false;
                     breathStatus.current.isRoaring = false;
@@ -730,7 +740,7 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
   const [position] = useState(new Vector3(0, 0, 10)); 
 
   // --- Breath Status Ref (Shared between Player and DinoBreath) ---
-  const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0, isRoaring: false });
+  const breathStatus = useRef({ isFiring: false, isMouthOpen: false, mouthAngle: 0, isRoaring: false, manualFire: false });
 
   // --- [可修改] 恐龍移動速度 (Speed) ---
   const speed = 2.0;
@@ -787,6 +797,8 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
     }
 
     const time = state.clock.getElapsedTime();
+    // 手動火焰（按鍵/按鈕）同步到噴火狀態
+    breathStatus.current.manualFire = (input.fire || fireButtonState.pressed) && !isLocked;
     const isMoving = Math.abs(moveForward) > 0.1 || Math.abs(moveTurn) > 0.1;
     
     const bobFreq = 10;
@@ -865,7 +877,8 @@ const Player: React.FC<any> = ({ onTrigger, isLocked, hitFlash = false }) => {
       mouthWorld.current.clone().addScaledVector(tmpForward.current, 1.5),
       mouthWorld.current.clone().addScaledVector(tmpForward.current, 3),
       mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH),
-      mouthWorld.current.clone().addScaledVector(tmpForward.current, 2).add(new Vector3(0, -2, 0)),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 2).add(new Vector3(0, -4, 0)),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH * 0.5).add(new Vector3(0, -6, 0)), // 下方穿透到平台
     ];
     playerFireState.active = firing;
     playerFireState.centers = fireTargets;
