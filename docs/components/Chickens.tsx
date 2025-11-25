@@ -114,6 +114,9 @@ const Chickens: React.FC<ChickensProps> = ({ onPlayerHit }) => {
       if (distToPlayer < HIT_RADIUS && state.clock.getElapsedTime() - chicken.lastPlayerHit > 0.3) {
         chicken.lastPlayerHit = state.clock.getElapsedTime();
         onPlayerHit();
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate(100);
+        }
       }
 
       if (playerActionState.fireActive) {

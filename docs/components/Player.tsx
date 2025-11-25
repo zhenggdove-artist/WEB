@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Group, MathUtils, BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry } from 'three';
 import { useInput } from '../hooks/useInput.ts';
-import { joystickState } from './UIOverlay.tsx';
+import { joystickState, fireButtonState } from './UIOverlay.tsx';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { updatePlayerFireState } from './playerState.ts';
 
@@ -18,7 +18,7 @@ const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
 };
 
 // --- 火焰判定參數（可在此調整） ---
-const FIRE_HIT_RADIUS = 1.6; // 火焰碰撞半徑
+const FIRE_HIT_RADIUS = 2.4; // 火焰碰撞半徑（向下擴大以碰到小雞）
 const FIRE_VISUAL_LENGTH = 6; // 火焰視覺長度
 
 const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }) => {
@@ -179,7 +179,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }
     prevPosition.current.copy(position);
 
     // 6. 火焰吐息更新（供小雞偵測火焰）
-    const firing = input.fire && !isLocked;
+    const firing = (input.fire || fireButtonState.pressed) && !isLocked;
     fireIntensityRef.current = MathUtils.lerp(fireIntensityRef.current, firing ? 1 : 0, firing ? 0.2 : 0.18);
 
     tmpForward.current.set(0, 0, -1).applyQuaternion(groupRef.current.quaternion).normalize();
@@ -189,6 +189,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }
       mouthWorld.current.clone().addScaledVector(tmpForward.current, 1.5),
       mouthWorld.current.clone().addScaledVector(tmpForward.current, 3),
       mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 2).add(new Vector3(0, -2, 0)), // 向下補一個判定點
     ];
     updatePlayerFireState(fireTargets, FIRE_HIT_RADIUS, fireIntensityRef.current > 0.05);
 

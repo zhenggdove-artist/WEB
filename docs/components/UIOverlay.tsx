@@ -6,6 +6,8 @@ interface UIOverlayProps {
 
 // Global event emitter for joystick to communicate with Scene/Player without passing props through Canvas
 export const joystickState = { x: 0, y: 0 };
+// Global fire button state (mobile / overlay)
+export const fireButtonState = { pressed: false };
 
 const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
   const stickRef = useRef<HTMLDivElement>(null);
@@ -56,6 +58,15 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
     joystickState.y = -(dy / maxDist); // Invert Y for intuitive up movement
   };
 
+  const handleFireDown = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    fireButtonState.pressed = true;
+  };
+  const handleFireUp = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    fireButtonState.pressed = false;
+  };
+
   return (
     <>
       {/* Fade Overlay */}
@@ -79,6 +90,19 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
           />
         </div>
       </div>
+
+      {/* Fire Trigger Button (mobile/desktop) */}
+      <button 
+        className="fire-button" 
+        onMouseDown={handleFireDown}
+        onMouseUp={handleFireUp}
+        onMouseLeave={handleFireUp}
+        onTouchStart={handleFireDown}
+        onTouchEnd={handleFireUp}
+        aria-label="Fire"
+      >
+        🔥
+      </button>
     </>
   );
 };
