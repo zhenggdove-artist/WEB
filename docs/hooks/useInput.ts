@@ -6,7 +6,9 @@ export const useInput = () => {
     backward: false,
     left: false,
     right: false,
-    fire: false,
+    fire: false, // 火焰鍵（Space/KeyJ，可在此增加/修改）
+    joystickX: 0,
+    joystickY: 0,
   });
 
   useEffect(() => {
@@ -69,5 +71,10 @@ export const useInput = () => {
     };
   }, []);
 
-  return { input };
+  // Joystick setters exposed to be called from UI
+  const setJoystick = (x: number, y: number) => {
+    setInput((prev) => ({ ...prev, joystickX: x, joystickY: y }));
+  };
+
+  return { input, setJoystick };
 };

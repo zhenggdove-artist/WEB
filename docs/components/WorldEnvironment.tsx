@@ -9,8 +9,8 @@ export const PLANET_CONFIG = {
   position: { x: 250, y: -550, z: 0 },
   radius: 200,
   planetColor: "#ffe733",
-  planetOuterPointCount: 8000,
-  planetInnerPointCount: 45000, 
+  planetOuterPointCount: 10000,
+  planetInnerPointCount: 300000, 
   
   // --- CENTRAL ALTAR SETTINGS (中央祭壇設定) ---
   altarColor: "#91041c", // 祭壇主體顏色
@@ -20,8 +20,8 @@ export const PLANET_CONFIG = {
   skyPlanetPosition: { x: 200, y: 250, z: -100 }, 
   skyPlanetRadius: 200,                            
   skyPlanetColor: "#91041c",                      
-  skyPlanetOuterCount: 12000,
-  skyPlanetInnerCount: 16000,
+  skyPlanetOuterCount: 38000,
+  skyPlanetInnerCount: 50000,
 
   // --- TENTACLE SETTINGS (觸手設定) ---
   tentacleCount: 1, 
@@ -163,14 +163,6 @@ const WorldEnvironment = () => {
   const stairWidth = 80; 
   const stairDepth = 0.5;
   const stairHeight = 0.2;
-  const stairGeometry = useMemo(
-    () => new THREE.BoxGeometry(stairWidth, stairHeight, stairDepth, 24, 2, 2),
-    [stairWidth, stairHeight, stairDepth]
-  );
-  const platformGeometry = useMemo(
-    () => new THREE.BoxGeometry(80, 1, 100, 48, 4, 48),
-    []
-  );
 
   const stairs = useMemo(() => {
     const items = [];
@@ -178,7 +170,7 @@ const WorldEnvironment = () => {
       items.push(
         <PointsObj
           key={`stair-${i}`}
-          geometry={stairGeometry}
+          geometry={new THREE.BoxGeometry(stairWidth, stairHeight, stairDepth, 150, 4, 8)}
           position={[0, i * stairHeight, -5 - i * stairDepth]}
           color={i % 5 === 0 ? "#00ffcc" : "#111122"}
           size={0.06}
@@ -187,7 +179,7 @@ const WorldEnvironment = () => {
       );
     }
     return items;
-  }, [stairGeometry, stairCount, stairDepth, stairHeight]);
+  }, []);
 
   // Remap logic for Core Planet
   const { x, y, z } = PLANET_CONFIG.position;
@@ -234,7 +226,7 @@ const WorldEnvironment = () => {
       {/* --- TOP PLATFORM --- */}
       <group position={[0, 7.8, -75]}>
          <PointsObj 
-            geometry={platformGeometry} 
+            geometry={new THREE.BoxGeometry(80, 1, 100, 200, 6, 200)} 
             position={[0, 0, 0]} 
             color="#222255" 
             size={0.06}
@@ -511,18 +503,18 @@ const HyperSpireAltar = () => {
   return (
     <group ref={groupRef}>
       {/* Dense Base Structure */}
-      <PointsObj geometry={new THREE.CylinderGeometry(10, 15, 4, 64, 6)} position={[0, 2, 0]} color="#440055" size={0.06} />
-      <PointsObj geometry={new THREE.CylinderGeometry(8, 10, 2, 48, 4)} position={[0, 5, 0]} color="#660077" size={0.05} />
-      <PointsObj geometry={new THREE.CylinderGeometry(4, 8, 30, 32, 24, true)} position={[0, 15, 0]} color="#8800ff" size={0.04} opacity={0.6} />
+      <PointsObj geometry={new THREE.CylinderGeometry(10, 15, 4, 100, 10)} position={[0, 2, 0]} color="#440055" size={0.06} />
+      <PointsObj geometry={new THREE.CylinderGeometry(8, 10, 2, 100, 5)} position={[0, 5, 0]} color="#660077" size={0.05} />
+      <PointsObj geometry={new THREE.CylinderGeometry(4, 8, 30, 64, 50, true)} position={[0, 15, 0]} color="#8800ff" size={0.04} opacity={0.6} />
       
       {/* Hyper Beam */}
-      <PointsObj geometry={new THREE.CylinderGeometry(1, 1, 80, 16, 48, true)} position={[0, 40, 0]} color={baseColor} size={0.06} opacity={0.9} />
-      <PointsObj geometry={new THREE.CylinderGeometry(0.2, 0.2, 80, 12, 32, true)} position={[0, 40, 0]} color="#ffffff" size={0.08} opacity={1} />
+      <PointsObj geometry={new THREE.CylinderGeometry(1, 1, 80, 24, 150, true)} position={[0, 40, 0]} color={baseColor} size={0.06} opacity={0.9} />
+      <PointsObj geometry={new THREE.CylinderGeometry(0.2, 0.2, 80, 12, 50, true)} position={[0, 40, 0]} color="#ffffff" size={0.08} opacity={1} />
 
       {/* 5 Rotating Rings */}
       {rings.map((r, i) => (
           <points key={i} position={[0, 12 + i * 2, 0]} userData={{ isRing: true, index: i }}>
-             <primitive object={new THREE.TorusGeometry(r.radius, 0.2, 12, 64)} attach="geometry" />
+             <primitive object={new THREE.TorusGeometry(r.radius, 0.2, 16, 120)} attach="geometry" />
              <pointsMaterial size={0.1} color={i===4 ? coneColor : baseColor} transparent opacity={0.8} blending={THREE.AdditiveBlending} />
           </points>
       ))}

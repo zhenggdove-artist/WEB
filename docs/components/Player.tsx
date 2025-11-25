@@ -10,6 +10,7 @@ interface PlayerProps {
   onTrigger: (url: string) => void;
   isLocked: boolean;
   hitFlash?: boolean;
+  heartCount: number;
 }
 
 // Helper to detect proximity
@@ -17,13 +18,11 @@ const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
   return pos.distanceTo(target) < range;
 };
 
-// Fire breath configuration
-const FIRE_HIT_RADIUS = 2.4; // Collision radius for flame breath
-const FIRE_VISUAL_LENGTH = 6; // Visual length of the flame cone
-const UP_AXIS = new Vector3(0, 1, 0);
-const FIRE_DROP_OFFSET = new Vector3(0, -2, 0);
+// --- 火焰判定參數（可在此調整） ---
+const FIRE_HIT_RADIUS = 3.2; // 火焰碰撞半徑（向下擴大以碰到小雞）
+const FIRE_VISUAL_LENGTH = 6; // 火焰視覺長度
 
-const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }) => {
+const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false, heartCount }) => {
   const groupRef = useRef<Group>(null);
   const leftLegRef = useRef<Group>(null);
   const rightLegRef = useRef<Group>(null);
@@ -35,11 +34,6 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }
   const tailMidRef = useRef<Group>(null);
   const tailTipRef = useRef<Group>(null);
   const fireRef = useRef<Group>(null);
-  const movementDir = useRef(new Vector3(0, 0, -1));
-  const nextPosition = useRef(new Vector3());
-  const movementDelta = useRef(new Vector3());
-  const fireTargetsRef = useRef([new Vector3(), new Vector3(), new Vector3(), new Vector3()]);
-  const fireLookTarget = useRef(new Vector3());
 
   const { input } = useInput();
   const { camera, controls } = useThree();
@@ -85,11 +79,11 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }
     // 2. Movement Physics
     groupRef.current.rotation.y += moveTurn * rotationSpeed;
 
-    movementDir.current.set(0, 0, -1);
-    movementDir.current.applyAxisAngle(UP_AXIS, groupRef.current.rotation.y);
+    const direction = new Vector3(0, 0, -1);
+    direction.applyAxisAngle(new Vector3(0, 1, 0), groupRef.current.rotation.y);
     
     if (moveForward !== 0) {
-      const newPos = nextPosition.current.copy(position).addScaledVector(movementDir.current, moveForward * speed);
+      const newPos = position.clone().addScaledVector(direction, moveForward * speed);
       
       // --- MOVEMENT BOUNDARIES ---
       // Platform/Stair Width is ~80 (Radius 40). Keep inside -35 to 35 for safety.
@@ -174,36 +168,38 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }
     groupRef.current.position.y += bob + 2.7; 
 
     // 5. SMART CAMERA FOLLOW (Preserves User Rotation/Zoom)
-    movementDelta.current.copy(position).sub(prevPosition.current);
-    if(movementDelta.current.lengthSq() > 0.00001) {
-        camera.position.add(movementDelta.current);
+    const moveDelta = position.clone().sub(prevPosition.current);
+    if(moveDelta.lengthSq() > 0.00001) {
+        camera.position.add(moveDelta);
         if(controls) {
              const orbit = controls as unknown as OrbitControlsImpl;
-             orbit.target.add(movementDelta.current);
+             orbit.target.add(moveDelta);
              orbit.update();
         }
     }
     prevPosition.current.copy(position);
 
-    // 6. Fire breath targeting and collisions
+    // 6. 火焰吐息更新（供小雞偵測火焰）
     const firing = (input.fire || fireButtonState.pressed) && !isLocked;
     fireIntensityRef.current = MathUtils.lerp(fireIntensityRef.current, firing ? 1 : 0, firing ? 0.2 : 0.18);
 
     tmpForward.current.set(0, 0, -1).applyQuaternion(groupRef.current.quaternion).normalize();
     mouthWorld.current.set(0, 3.8, 2.2).applyMatrix4(groupRef.current.matrixWorld);
 
-    const fireTargets = fireTargetsRef.current;
-    fireTargets[0].copy(mouthWorld.current).addScaledVector(tmpForward.current, 1.5);
-    fireTargets[1].copy(mouthWorld.current).addScaledVector(tmpForward.current, 3);
-    fireTargets[2].copy(mouthWorld.current).addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH);
-    fireTargets[3].copy(mouthWorld.current).addScaledVector(tmpForward.current, 2).add(FIRE_DROP_OFFSET);
+    const fireTargets = [
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 1.5),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 3),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 2).add(new Vector3(0, -2, 0)), // 向下補一個判定點
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 2.2).add(new Vector3(0, -6, 0)), // 更貼近地面的小雞判定點
+    ];
     updatePlayerFireState(fireTargets, FIRE_HIT_RADIUS, fireIntensityRef.current > 0.05);
 
     if (fireRef.current) {
       fireRef.current.visible = fireIntensityRef.current > 0.05;
       fireRef.current.position.copy(mouthWorld.current);
-      fireLookTarget.current.copy(mouthWorld.current).addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH);
-      fireRef.current.lookAt(fireLookTarget.current);
+      const lookTarget = mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH);
+      fireRef.current.lookAt(lookTarget);
       const fireScale = 0.8 + fireIntensityRef.current * 0.6;
       fireRef.current.scale.set(fireScale, fireScale, fireScale);
     }
@@ -233,6 +229,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }
         tailMidRef={tailMidRef}
         tailTipRef={tailTipRef}
       />
+      <HeartStack count={heartCount} />
       <FireBreath fireRef={fireRef} />
     </group>
   );
@@ -258,6 +255,37 @@ const FireBreath = ({ fireRef }: { fireRef: React.RefObject<Group | null> }) => 
         <coneGeometry args={[0.6, FIRE_VISUAL_LENGTH * 0.55, 12, 4, true]} />
         <pointsMaterial size={0.1} color="#ffd166" transparent opacity={0.55} />
       </points>
+    </group>
+  );
+};
+
+const HeartStack = ({ count }: { count: number }) => {
+  const heartsGroup = useRef<Group>(null);
+
+  useFrame((state) => {
+    if (!heartsGroup.current) return;
+    heartsGroup.current.rotation.y = state.clock.getElapsedTime() * 1.2;
+    heartsGroup.current.position.y = 6 + Math.sin(state.clock.getElapsedTime() * 2) * 0.1;
+  });
+
+  if (count <= 0) return null;
+
+  return (
+    <group ref={heartsGroup} position={[0, 6, 0]} frustumCulled={false}>
+      {Array.from({ length: count }).map((_, i) => (
+        <HeartIcon key={i} position={[0, i * 0.6, 0]} />
+      ))}
+    </group>
+  );
+};
+
+const HeartIcon = ({ position }: { position: [number, number, number] }) => {
+  const heartColor = "#ff1fb2";
+  return (
+    <group position={position} scale={[0.7, 0.7, 0.7]}>
+      <PointsShape geometry={new SphereGeometry(0.25, 10, 10)} position={[0.15, 0.1, 0]} color={heartColor} size={0.05} opacity={0.9} />
+      <PointsShape geometry={new SphereGeometry(0.25, 10, 10)} position={[-0.15, 0.1, 0]} color={heartColor} size={0.05} opacity={0.9} />
+      <PointsShape geometry={new ConeGeometry(0.35, 0.55, 12)} position={[0, -0.15, 0]} rotation={[Math.PI, 0, 0]} color={heartColor} size={0.05} opacity={0.9} />
     </group>
   );
 };
@@ -446,5 +474,3 @@ const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity
 }
 
 export default Player;
-
-

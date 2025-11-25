@@ -5,10 +5,13 @@ import Scene from './components/Scene.tsx';
 import UIOverlay from './components/UIOverlay.tsx';
 
 export default function App() {
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const [isFading, setIsFading] = useState(false);
 
   const handleTrigger = (url: string) => {
     if (isFading) return;
+    console.log("Triggered redirect to:", url);
+    setRedirectUrl(url);
     setIsFading(true);
     
     // Wait for fade animation then redirect

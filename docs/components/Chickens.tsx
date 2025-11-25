@@ -2,8 +2,9 @@ import React, { useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { playerActionState } from './playerState.ts';
+import { useEffect } from 'react';
 
-type ChickenMode = 'wander' | 'chase' | 'drumstick';
+type ChickenMode = 'wander' | 'chase' | 'drumstick' | 'respawn';
 
 interface ChickenState {
   position: THREE.Vector3;
@@ -16,10 +17,12 @@ interface ChickenState {
   drumstickTimer: number;
   drumstickOpacity: number;
   lastPlayerHit: number;
+  respawnTimer: number;
 }
 
 interface ChickensProps {
   onPlayerHit: () => void;
+  onDrumstickCollected: () => void;
 }
 
 // --- 小雞行為參數（可在此調整） ---
@@ -36,6 +39,14 @@ const HOP_HEIGHT = 0.65; // 彈跳幅度
 const HOP_SPEED = 5.5; // 彈跳頻率
 const DRUMSTICK_DURATION = 5; // 雞腿停留秒數（逐漸消失）
 const FIRE_PADDING = 0.2; // 火焰判定緩衝
+const FIRE_VERTICAL_TOLERANCE = 6; // Allow fire hits even when mouth height differs
+const DRUMSTICK_PICKUP_RADIUS = 1.6; // Player pickup radius for drumsticks
+const RESPAWN_DELAY = 3; // Seconds until a collected drumstick respawns as a chick
+
+// Foot-fire box (pressed fire key makes a ground AoE under dino feet)
+const FOOT_FIRE_HALF_X = 4; // Half width on X axis
+const FOOT_FIRE_HALF_Z = 4; // Half depth on Z axis
+const FOOT_FIRE_HEIGHT = 3; // Vertical tolerance to still count as foot-level hit
 
 const createInitialChickens = (): ChickenState[] => {
   // 固定初始位置讓進入場景時一定能看到（平台中央一字排開）
@@ -56,13 +67,39 @@ const createInitialChickens = (): ChickenState[] => {
     drumstickTimer: 0,
     drumstickOpacity: 1,
     lastPlayerHit: -10,
+    respawnTimer: 0,
   }));
 };
 
-const Chickens: React.FC<ChickensProps> = ({ onPlayerHit }) => {
+const randomizeChicken = (chicken: ChickenState) => {
+  const startXs = [-12, -6, 0, 6, 12];
+  const startZ = -75;
+  const seed = Math.floor(Math.random() * startXs.length);
+  chicken.position.set(
+    startXs[seed] + (Math.random() - 0.5) * 1.5,
+    BASE_HEIGHT,
+    startZ + (Math.random() - 0.5) * 4
+  );
+  chicken.velocity.set(0, 0, 0);
+  chicken.wanderDir = Math.random() * Math.PI * 2;
+  chicken.wanderTimer = 1.5 + Math.random() * 1.5;
+  chicken.hopOffset = Math.random() * Math.PI * 2;
+  chicken.mode = 'wander';
+  chicken.alert = false;
+  chicken.drumstickTimer = 0;
+  chicken.drumstickOpacity = 1;
+  chicken.respawnTimer = 0;
+  chicken.lastPlayerHit = -10;
+};
+
+const Chickens: React.FC<ChickensProps> = ({ onPlayerHit, onDrumstickCollected }) => {
   const { scene } = useThree();
   const chickensRef = useRef<ChickenState[]>(createInitialChickens());
   const playerPos = useRef(new THREE.Vector3());
+
+  useEffect(() => {
+    console.log('Chickens spawned:', chickensRef.current.length);
+  }, []);
 
   useFrame((state, delta) => {
     const player = scene.getObjectByName('PlayerGroup') as THREE.Group | null;
@@ -71,13 +108,51 @@ const Chickens: React.FC<ChickensProps> = ({ onPlayerHit }) => {
     player.getWorldPosition(playerPos.current);
 
     chickensRef.current.forEach((chicken) => {
+      // Respawn queue keeps total at CHICKEN_COUNT
+      if (chicken.mode === 'respawn') {
+        chicken.respawnTimer += delta;
+        if (chicken.respawnTimer >= RESPAWN_DELAY) {
+          randomizeChicken(chicken);
+        }
+        return;
+      }
+
       if (chicken.mode === 'drumstick') {
         chicken.drumstickTimer += delta;
         chicken.drumstickOpacity = Math.max(0, 1 - chicken.drumstickTimer / DRUMSTICK_DURATION);
         chicken.alert = false;
         chicken.velocity.set(0, 0, 0);
         chicken.position.y = BASE_HEIGHT;
+
+        // Player picks up drumstick -> stack heart
+        const pickupDist = chicken.position.distanceTo(playerPos.current);
+        if (pickupDist < DRUMSTICK_PICKUP_RADIUS) {
+          chicken.mode = 'respawn';
+          chicken.drumstickOpacity = 0;
+          chicken.respawnTimer = 0;
+          onDrumstickCollected();
+        }
+        // Auto clear if faded out so we can respawn a fresh chick
+        if (chicken.drumstickOpacity <= 0.01) {
+          chicken.mode = 'respawn';
+          chicken.respawnTimer = 0;
+        }
         return;
+      }
+
+      // Foot-level fire AoE: axis-aligned box under the player while holding fire
+      if (playerActionState.fireActive) {
+        const dx = Math.abs(chicken.position.x - playerPos.current.x);
+        const dz = Math.abs(chicken.position.z - playerPos.current.z);
+        const dy = Math.abs(chicken.position.y - playerPos.current.y);
+        if (dx <= FOOT_FIRE_HALF_X && dz <= FOOT_FIRE_HALF_Z && dy <= FOOT_FIRE_HEIGHT) {
+          chicken.mode = 'drumstick';
+          chicken.drumstickTimer = 0;
+          chicken.drumstickOpacity = 1;
+          chicken.velocity.set(0, 0, 0);
+          chicken.position.y = BASE_HEIGHT;
+          return;
+        }
       }
 
       const distToPlayer = chicken.position.distanceTo(playerPos.current);
@@ -116,7 +191,15 @@ const Chickens: React.FC<ChickensProps> = ({ onPlayerHit }) => {
 
       if (playerActionState.fireActive) {
         for (const center of playerActionState.fireCenters) {
-          if (center && center.distanceTo(chicken.position) < playerActionState.fireRadius + FIRE_PADDING) {
+          if (!center) continue;
+
+          const verticalGap = Math.abs(center.y - chicken.position.y);
+          if (verticalGap > FIRE_VERTICAL_TOLERANCE) continue;
+
+          const dx = center.x - chicken.position.x;
+          const dz = center.z - chicken.position.z;
+          const flatDist = Math.hypot(dx, dz);
+          if (flatDist < playerActionState.fireRadius + FIRE_PADDING) {
             chicken.mode = 'drumstick';
             chicken.drumstickTimer = 0;
             chicken.drumstickOpacity = 1;
@@ -157,7 +240,7 @@ const ChickenModel = ({ stateRef, index }: { stateRef: React.MutableRefObject<Ch
       if (!Number.isNaN(heading)) groupRef.current.rotation.y = heading;
     }
 
-    if (liveRef.current) liveRef.current.visible = state.mode !== 'drumstick';
+    if (liveRef.current) liveRef.current.visible = state.mode === 'wander' || state.mode === 'chase';
     if (drumstickRef.current) {
       drumstickRef.current.visible = state.mode === 'drumstick' && state.drumstickOpacity > 0.01;
     }
@@ -195,8 +278,8 @@ const ChickenModel = ({ stateRef, index }: { stateRef: React.MutableRefObject<Ch
       </group>
       <group ref={drumstickRef} visible={false}>
         <PointsShape geometry={new THREE.SphereGeometry(0.9, 12, 12)} position={[0, 0.2, 0]} scale={[1.4, 0.8, 1.0]} color="#c47a2c" size={0.32} opacity={1} materialRef={drumstickMat} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.8, 8, 1)} position={[0, 0.9, 0]} color="#ffffff" size={0.32} opacity={1} materialRef={boneMat} sizeAttenuation={false} depthTest={false} />
-        <PointsShape geometry={new THREE.SphereGeometry(0.18, 8, 8)} position={[0, 1.35, 0]} color="#ffffff" size={0.32} opacity={1} materialRef={boneMat} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.CylinderGeometry(0.15, 0.15, 0.9, 8, 1)} position={[-1.05, 0.2, 0]} rotation={[0, 0, Math.PI / 2]} color="#ffffff" size={0.32} opacity={1} materialRef={boneMat} sizeAttenuation={false} depthTest={false} />
+        <PointsShape geometry={new THREE.SphereGeometry(0.18, 8, 8)} position={[-1.55, 0.2, 0]} color="#ffffff" size={0.32} opacity={1} materialRef={boneMat} sizeAttenuation={false} depthTest={false} />
       </group>
       <pointLight position={[0, 2.5, 0]} intensity={6} distance={25} color="#ffeeaa" />
     </group>

@@ -30,6 +30,7 @@ interface SceneProps {
 
 const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
   const [playerHitFlash, setPlayerHitFlash] = useState(false);
+  const [heartCount, setHeartCount] = useState(0);
   const hitFlashTimer = useRef<number | null>(null);
 
   const triggerPlayerHitFlash = () => {
@@ -53,8 +54,11 @@ const Scene: React.FC<SceneProps> = ({ onTrigger, isLocked }) => {
       {/* Deep Fog for depth and fade out effect */}
       <fog attach="fog" args={['#050505', 150, 1500]} />
 
-      <Player onTrigger={onTrigger} isLocked={isLocked} hitFlash={playerHitFlash} />
-      <Chickens onPlayerHit={triggerPlayerHitFlash} />
+      <Player onTrigger={onTrigger} isLocked={isLocked} hitFlash={playerHitFlash} heartCount={heartCount} />
+      <Chickens 
+        onPlayerHit={triggerPlayerHitFlash} 
+        onDrumstickCollected={() => setHeartCount((c) => c + 1)} 
+      />
       <WorldEnvironment />
       
       <ChromeLabelSystem />

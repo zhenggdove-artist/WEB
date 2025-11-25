@@ -4,9 +4,9 @@ interface UIOverlayProps {
   isFading: boolean;
 }
 
-// Shared joystick state consumed by the 3D scene.
+// Global event emitter for joystick to communicate with Scene/Player without passing props through Canvas
 export const joystickState = { x: 0, y: 0 };
-// Shared fire button state for mobile/overlay.
+// Global fire button state (mobile / overlay)
 export const fireButtonState = { pressed: false };
 
 const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
@@ -21,8 +21,9 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touching) return;
-    updateJoystick(e.touches[0]);
+    if (touching) {
+      updateJoystick(e.touches[0]);
+    }
   };
 
   const handleTouchEnd = () => {
@@ -37,6 +38,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
     const baseRect = baseRef.current.getBoundingClientRect();
     const centerX = baseRect.left + baseRect.width / 2;
     const centerY = baseRect.top + baseRect.height / 2;
+
     const maxDist = baseRect.width / 2;
 
     let dx = touch.clientX - centerX;
@@ -50,15 +52,16 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
     }
 
     setPos({ x: dx, y: dy });
+
+    // Normalize -1 to 1
     joystickState.x = dx / maxDist;
-    joystickState.y = -(dy / maxDist);
+    joystickState.y = -(dy / maxDist); // Invert Y for intuitive up movement
   };
 
   const handleFireDown = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     fireButtonState.pressed = true;
   };
-
   const handleFireUp = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     fireButtonState.pressed = false;
@@ -66,29 +69,31 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
 
   return (
     <>
+      {/* Fade Overlay */}
       <div className={`overlay-fade ${isFading ? 'active' : ''}`} />
-
-      <div
+      
+      {/* Virtual Joystick (Mobile Only) */}
+      <div 
         className="joystick-wrapper"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         <div ref={baseRef} className="joystick-base">
-          <div
+          <div 
             ref={stickRef}
             className="joystick-stick"
             style={{
               transform: `translate(${pos.x}px, ${pos.y}px)`,
-              transition: touching ? 'none' : 'transform 0.2s ease-out',
+              transition: touching ? 'none' : 'transform 0.2s ease-out'
             }}
           />
         </div>
       </div>
 
-      <button
-        className="fire-button"
-        type="button"
+      {/* Fire Trigger Button (mobile/desktop) */}
+      <button 
+        className="fire-button" 
         onMouseDown={handleFireDown}
         onMouseUp={handleFireUp}
         onMouseLeave={handleFireUp}
@@ -96,7 +101,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
         onTouchEnd={handleFireUp}
         aria-label="Fire"
       >
-        FIRE
+        🔥
       </button>
     </>
   );
