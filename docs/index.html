@@ -1636,21 +1636,23 @@ interface Chick {
 const startXs = [-12, -6, 0, 6, 12];
 const startZ = -75;
 
+const createInitialChicks = (): Chick[] => {
+  return Array.from({ length: CHICKEN_COUNT }).map((_, i) => ({
+    pos: new THREE.Vector3(startXs[i % startXs.length], BASE_HEIGHT, startZ + (Math.random() - 0.5) * 6),
+    vel: new THREE.Vector3(),
+    dir: Math.random() * Math.PI * 2,
+    timer: 1 + Math.random() * 1.5,
+    hopOff: Math.random() * Math.PI * 2,
+    mode: 'wander' as Mode,
+    alert: false,
+    drumTime: 0,
+    opacity: 1,
+  }));
+};
+
 const Chickens: React.FC = () => {
   const { scene } = useThree();
-  const chickens = useRef<Chick[]>(() => {
-    return Array.from({ length: CHICKEN_COUNT }).map((_, i) => ({
-      pos: new THREE.Vector3(startXs[i % startXs.length], BASE_HEIGHT, startZ + (Math.random() - 0.5) * 6),
-      vel: new THREE.Vector3(),
-      dir: Math.random() * Math.PI * 2,
-      timer: 1 + Math.random() * 1.5,
-      hopOff: Math.random() * Math.PI * 2,
-      mode: 'wander' as Mode,
-      alert: false,
-      drumTime: 0,
-      opacity: 1,
-    }));
-  }) as React.MutableRefObject<Chick[]>;
+  const chickens = useRef<Chick[]>(createInitialChicks());
 
   useFrame((state, delta) => {
     const player = scene.getObjectByName('PlayerGroup') as THREE.Group | null;
@@ -1965,17 +1967,8 @@ root.render(
             blobUrls[name] = URL.createObjectURL(blob);
           }
 
-          const externalImports = {
-            "react": "https://esm.sh/react@18.2.0",
-            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-            "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
-            "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.15.16?external=react,react-dom,three",
-            "@react-three/drei": "https://esm.sh/@react-three/drei@9.99.0?external=react,react-dom,three,@react-three/fiber",
-            "three": "https://esm.sh/three@0.161.0",
-            "three-stdlib": "https://esm.sh/three-stdlib@2.29.4?external=three"
-          };
-          
-          const importMap = { imports: { ...externalImports, ...blobUrls } };
+          // 頂部已宣告外部 import map，這裡僅加入本地 blob 模組以避免重複衝突
+          const importMap = { imports: { ...blobUrls } };
           const mapScript = document.createElement('script');
           mapScript.type = 'importmap';
           mapScript.textContent = JSON.stringify(importMap);
@@ -1995,7 +1988,6 @@ root.render(
       }
       init();
     </script>
-  <script type="module" src="./index.tsx"></script>
 </body>
 </html>
 
