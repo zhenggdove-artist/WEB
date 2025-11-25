@@ -1743,9 +1743,10 @@ const DRUMSTICK_DURATION = 10;  // 雞腿停留秒數（逐漸消失）
 const CHICKEN_SCALE = 1.3;     // 小雞整體縮放（原本 3，現在縮小為 30% 的 0.9）
 const DRUMSTICK_PICKUP_RADIUS = 6; // 撿雞腿判定半徑（平面距離，放寬方便撿取）
 const RESPAWN_DELAY = 3; // 雞腿消失或撿取後再生延遲秒數
-const FOOT_FIRE_HALF_X = 6; // 腳下 AoE X 半徑（縮小一半）
-const FOOT_FIRE_HALF_Z = 27; // 腳下 AoE Z 半徑（縮小約三分之一）
-const FOOT_FIRE_HEIGHT = 50; // 腳下 AoE Y 容差（忽略高度落差）
+// 噴火判定盒：以恐龍為中心，前方 40、左右各 2、高度容忍 50
+const FIRE_BOX_FORWARD = 40;
+const FIRE_BOX_HALF_X = 2;
+const FIRE_BOX_HALF_Y = 50;
 
 type Mode = 'wander' | 'chase' | 'drumstick' | 'respawn';
 interface Chick {
@@ -1784,10 +1785,17 @@ const createInitialChicks = (): Chick[] => {
 const Chickens: React.FC<{ onPlayerHit?: () => void; onDrumstickCollected?: () => void }> = ({ onPlayerHit, onDrumstickCollected }) => {
   const { scene } = useThree();
   const chickens = useRef<Chick[]>(createInitialChicks());
+  const playerQuat = useRef(new THREE.Quaternion());
+  const invQuat = useRef(new THREE.Quaternion());
+  const tmpLocal = new THREE.Vector3();
 
   useFrame((state, delta) => {
     const player = scene.getObjectByName('PlayerGroup') as THREE.Group | null;
     const playerPos = player ? player.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 8, -70);
+    if (player) {
+      player.getWorldQuaternion(playerQuat.current);
+      invQuat.current.copy(playerQuat.current).invert();
+    }
 
     chickens.current.forEach((c) => {
       if (c.mode === 'respawn') {
@@ -1856,9 +1864,14 @@ const Chickens: React.FC<{ onPlayerHit?: () => void; onDrumstickCollected?: () =
           }
         }
         if (playerFireState.active) {
-          const inv = new THREE.Matrix4().copy(player.matrixWorld).invert();
-          const localPos = c.pos.clone().applyMatrix4(inv);
-          if (Math.abs(localPos.x) <= FOOT_FIRE_HALF_X && localPos.z >= 0 && localPos.z <= FOOT_FIRE_HALF_Z && Math.abs(localPos.y) <= FOOT_FIRE_HEIGHT) {
+          // 以恐龍為中心、前方盒狀區域判定
+          tmpLocal.copy(c.pos).sub(playerPos).applyQuaternion(invQuat.current);
+          if (
+            tmpLocal.z >= 0 &&
+            tmpLocal.z <= FIRE_BOX_FORWARD &&
+            Math.abs(tmpLocal.x) <= FIRE_BOX_HALF_X &&
+            Math.abs(tmpLocal.y) <= FIRE_BOX_HALF_Y
+          ) {
             c.mode = 'drumstick';
             c.drumTime = 0;
             c.opacity = 1;
@@ -1866,16 +1879,6 @@ const Chickens: React.FC<{ onPlayerHit?: () => void; onDrumstickCollected?: () =
             c.vel.set(0, 0, 0);
             c.pos.y = BASE_HEIGHT;
             return;
-          }
-          for (const center of playerFireState.centers) {
-            const flatDist = Math.hypot(center.x - c.pos.x, center.z - c.pos.z);
-            if (flatDist < playerFireState.radius) {
-              c.mode = 'drumstick';
-              c.drumTime = 0;
-              c.opacity = 1;
-              c.respawnTimer = 0;
-              break;
-            }
           }
         }
       }
