@@ -303,7 +303,7 @@ const BREATH_TIMING = {
 };
 
 // --- BREATH LOOK (????) ---
-const FIRE_COLORS = ['#ff00aa', '#ff66cc', '#ff99dd']; // 桃紅系
+const FIRE_COLORS = ['#ff0088', '#ff33aa', '#ff55cc']; // 桃紅系 (降低偏白)
 
 // --- MOUTH CONFIG (????/??) ---
 const MOUTH_CONFIG = {
@@ -563,19 +563,28 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 breathStatus.current.isMouthOpen = true;
                 breathStatus.current.isRoaring = false;
                 fireTimerRef.current += delta;
+                // Hard cap: stop everything at 1s total
+                if (fireTimerRef.current >= 1.0) {
+                    fireTimerRef.current = 0;
+                    fireHoldRef.current = 0;
+                    progress.current = 0;
+                    fadeRef.current = 0;
+                    breathStatus.current.isFiring = false;
+                    breathStatus.current.isMouthOpen = false;
+                    setState('IDLE');
+                    nextTriggerTime.current = time + BREATH_TIMING.idleDelayMin + Math.random() * BREATH_TIMING.idleDelayJitter;
+                    break;
+                }
+
                 // Animate progress 0 -> 1 (Shooting out)
                 progress.current += delta * BREATH_TIMING.fireGrowSpeed; 
                 if (progress.current >= 1.0) {
                     progress.current = 1.0;
                     fireHoldRef.current += delta;
-                    if (fireHoldRef.current >= BREATH_TIMING.fireDuration || fireTimerRef.current >= 1.0) {
+                    if (fireHoldRef.current >= BREATH_TIMING.fireDuration) {
                         timerRef.current = 0;
                         setState('FADING');
                     }
-                }
-                // Hard cap total fire time
-                if (fireTimerRef.current >= 1.0) {
-                    fireHoldRef.current = 0;
                 }
                 break;
 
@@ -588,11 +597,8 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 timerRef.current += delta;
                 fireTimerRef.current += delta;
                 fadeRef.current = Math.max(0, 1 - timerRef.current * BREATH_TIMING.fadeSpeed);
-                // If total fire time exceeds 1s, force fade to 0
-                if (fireTimerRef.current >= 1.0) {
-                    fadeRef.current = 0;
-                }
-                if (fadeRef.current <= 0.01) {
+                // If total fire time exceeds 1s, force quick exit
+                if (fireTimerRef.current >= 1.0 || fadeRef.current <= 0.01) {
                     breathStatus.current.isFiring = false;
                     breathStatus.current.isMouthOpen = false;
                     breathStatus.current.isRoaring = false;
