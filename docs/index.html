@@ -356,12 +356,45 @@ const HeartStack = ({ count }: { count: number }) => {
 };
 
 const HeartIcon = ({ position }: { position: [number, number, number] }) => {
-    const color = "#ff1fb2";
+    // 8x7 像素心形，模仿圖片的像素感
+    const pixelSize = 0.12;
+    const mainColor = "#ff6aa7";
+    const brightColor = "#ff9fcb";
+    const pixels: Array<{ x: number; y: number; color: string }> = [];
+    const pattern = [
+      " .11..11. ",
+      ".111..111.",
+      "1111..1111",
+      "1111111111",
+      ".11111111.",
+      "..111111..",
+      "...1111...",
+      "....11....",
+    ];
+    pattern.forEach((row, y) => {
+      [...row].forEach((ch, x) => {
+        if (ch === "1") {
+          const isHighlight = x <= 2 && y <= 2;
+          pixels.push({ x, y, color: isHighlight ? brightColor : mainColor });
+        }
+      });
+    });
+    const offsetX = - (pattern[0].length - 1) * pixelSize * 0.5;
+    const offsetY = - (pattern.length - 1) * pixelSize * 0.5;
     return (
-      <group position={position} scale={[0.7, 0.7, 0.7]}>
-        <PointsShape geometry={new SphereGeometry(0.25, 10, 10)} position={[0.15, 0.1, 0]} color={color} size={0.05} opacity={0.9} />
-        <PointsShape geometry={new SphereGeometry(0.25, 10, 10)} position={[-0.15, 0.1, 0]} color={color} size={0.05} opacity={0.9} />
-        <PointsShape geometry={new ConeGeometry(0.35, 0.55, 12)} position={[0, -0.15, 0]} rotation={[Math.PI, 0, 0]} color={color} size={0.05} opacity={0.9} />
+      <group position={position} scale={[1.1, 1.1, 1.1]}>
+        {pixels.map((p, i) => (
+          <PointsShape
+            key={i}
+            geometry={new BoxGeometry(pixelSize, pixelSize, pixelSize)}
+            position={[offsetX + p.x * pixelSize, offsetY + (pattern.length - 1 - p.y) * pixelSize, 0]}
+            color={p.color}
+            size={0.08}
+            opacity={0.95}
+            sizeAttenuation={false}
+            depthTest={false}
+          />
+        ))}
       </group>
     );
 };
