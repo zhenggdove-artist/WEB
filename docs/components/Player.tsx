@@ -4,10 +4,12 @@ import { Vector3, Group, MathUtils, BoxGeometry, SphereGeometry, CylinderGeometr
 import { useInput } from '../hooks/useInput.ts';
 import { joystickState } from './UIOverlay.tsx';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import { updatePlayerFireState } from './playerState.ts';
 
 interface PlayerProps {
   onTrigger: (url: string) => void;
   isLocked: boolean;
+  hitFlash?: boolean;
 }
 
 // Helper to detect proximity
@@ -15,7 +17,11 @@ const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
   return pos.distanceTo(target) < range;
 };
 
-const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
+// --- 火焰判定參數（可在此調整） ---
+const FIRE_HIT_RADIUS = 1.6; // 火焰碰撞半徑
+const FIRE_VISUAL_LENGTH = 6; // 火焰視覺長度
+
+const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked, hitFlash = false }) => {
   const groupRef = useRef<Group>(null);
   const leftLegRef = useRef<Group>(null);
   const rightLegRef = useRef<Group>(null);
@@ -26,6 +32,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const tailBaseRef = useRef<Group>(null);
   const tailMidRef = useRef<Group>(null);
   const tailTipRef = useRef<Group>(null);
+  const fireRef = useRef<Group>(null);
 
   const { input } = useInput();
   const { camera, controls } = useThree();
@@ -40,9 +47,17 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
   const altarPos = new Vector3(0, 8, -110);
   const monumentPos = new Vector3(-30, 8, -105); 
   const debrisPos = new Vector3(30, 8, -105);   
+  const fireIntensityRef = useRef(0); // 0~1 的火焰強度，用來平滑顯示
+  const tmpForward = useRef(new Vector3(0, 0, -1));
+  const mouthWorld = useRef(new Vector3());
 
   useFrame((state) => {
-    if (!groupRef.current || isLocked) return;
+    if (!groupRef.current) return;
+    if (isLocked) {
+      updatePlayerFireState([], FIRE_HIT_RADIUS, false);
+      if (fireRef.current) fireRef.current.visible = false;
+      return;
+    }
 
     // 1. Input Handling
     let moveForward = 0;
@@ -163,8 +178,30 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
     }
     prevPosition.current.copy(position);
 
+    // 6. 火焰吐息更新（供小雞偵測火焰）
+    const firing = input.fire && !isLocked;
+    fireIntensityRef.current = MathUtils.lerp(fireIntensityRef.current, firing ? 1 : 0, firing ? 0.2 : 0.18);
 
-    // 6. Triggers (Larger range due to scale)
+    tmpForward.current.set(0, 0, -1).applyQuaternion(groupRef.current.quaternion).normalize();
+    mouthWorld.current.set(0, 3.8, 2.2).applyMatrix4(groupRef.current.matrixWorld);
+
+    const fireTargets = [
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 1.5),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, 3),
+      mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH),
+    ];
+    updatePlayerFireState(fireTargets, FIRE_HIT_RADIUS, fireIntensityRef.current > 0.05);
+
+    if (fireRef.current) {
+      fireRef.current.visible = fireIntensityRef.current > 0.05;
+      fireRef.current.position.copy(mouthWorld.current);
+      const lookTarget = mouthWorld.current.clone().addScaledVector(tmpForward.current, FIRE_VISUAL_LENGTH);
+      fireRef.current.lookAt(lookTarget);
+      const fireScale = 0.8 + fireIntensityRef.current * 0.6;
+      fireRef.current.scale.set(fireScale, fireScale, fireScale);
+    }
+
+    // 7. Triggers (Larger range due to scale)
     if (checkTrigger(position, altarPos, 12)) {
       onTrigger("https://www.zhenggdove.com/exhibition");
     }
@@ -178,6 +215,7 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
 
   return (
     <group ref={groupRef} name="PlayerGroup">
+      {hitFlash && <FlashAura />}
       <TRexModel 
         leftLegRef={leftLegRef} 
         rightLegRef={rightLegRef}
@@ -188,6 +226,31 @@ const Player: React.FC<PlayerProps> = ({ onTrigger, isLocked }) => {
         tailMidRef={tailMidRef}
         tailTipRef={tailTipRef}
       />
+      <FireBreath fireRef={fireRef} />
+    </group>
+  );
+};
+
+const FlashAura = () => {
+  return (
+    <points>
+      <sphereGeometry args={[3.2, 16, 16]} />
+      <pointsMaterial size={0.18} color="#ff3333" transparent opacity={0.6} />
+    </points>
+  );
+};
+
+const FireBreath = ({ fireRef }: { fireRef: React.RefObject<Group | null> }) => {
+  return (
+    <group ref={fireRef} visible={false}>
+      <points>
+        <coneGeometry args={[0.9, FIRE_VISUAL_LENGTH, 16, 4, true]} />
+        <pointsMaterial size={0.12} color="#ff6b35" transparent opacity={0.65} />
+      </points>
+      <points position={[0, 0, FIRE_VISUAL_LENGTH * 0.35]}>
+        <coneGeometry args={[0.6, FIRE_VISUAL_LENGTH * 0.55, 12, 4, true]} />
+        <pointsMaterial size={0.1} color="#ffd166" transparent opacity={0.55} />
+      </points>
     </group>
   );
 };
