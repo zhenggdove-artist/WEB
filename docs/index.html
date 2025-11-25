@@ -296,7 +296,7 @@ const BREATH_TIMING = {
     fireGrowSpeed: 30,      // ?????? (????)
     fadeSpeed: 3.0,          // ?????? (?)
     fireDuration: 1.0,       // 火焰持續時間 (秒)
-    mouthHoldNoFire: 0.2,   // 只張嘴不噴火時維持張開的時間 (秒)
+    mouthHoldNoFire: 0.2,    // 只張嘴不噴火時維持張開的時間 (秒)
     idleDelayMin: 0.2,       // ?????? (?)
     idleDelayJitter: 0.1,    // ???????? (?)
     fireProbability: 0.6     // ??????????
@@ -468,6 +468,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
     const progress = useRef(0);
     const nextTriggerTime = useRef(BREATH_TIMING.idleDelayMin + BREATH_TIMING.idleDelayJitter);
     const timerRef = useRef(0);
+    const fireTimerRef = useRef(0);
     const fireHoldRef = useRef(0);
     const fadeRef = useRef(0);
     const firePlanRef = useRef(false);
@@ -521,6 +522,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                     firePlanRef.current = Math.random() < BREATH_TIMING.fireProbability;
                     setState('PRE_FIRE');
                     timerRef.current = 0; // Reset local timer
+                    fireTimerRef.current = 0;
                 }
                 break;
 
@@ -535,6 +537,7 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                         setState('FIRING');
                         progress.current = 0.0; // CRITICAL RESET: Start animation from 0
                         fireHoldRef.current = 0;
+                        fireTimerRef.current = 0;
                         fadeRef.current = 1;
                         breathStatus.current.isRoaring = false;
                     } else {
@@ -561,13 +564,18 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 breathStatus.current.isRoaring = false;
                 // Animate progress 0 -> 1 (Shooting out)
                 progress.current += delta * BREATH_TIMING.fireGrowSpeed; 
+                fireTimerRef.current += delta;
                 if (progress.current >= 1.0) {
                     progress.current = 1.0;
                     fireHoldRef.current += delta;
-                    if (fireHoldRef.current >= BREATH_TIMING.fireDuration) {
+                    if (fireHoldRef.current >= BREATH_TIMING.fireDuration || fireTimerRef.current >= 1.0) {
                         timerRef.current = 0;
                         setState('FADING');
                     }
+                }
+                // Hard cap total fire time
+                if (fireTimerRef.current >= 1.0) {
+                    fireHoldRef.current = 0;
                 }
                 break;
 
@@ -578,12 +586,18 @@ const DinoBreath = ({ breathStatus }: { breathStatus: any }) => {
                 // Keep full length, only fade away
                 progress.current = 1.0;
                 timerRef.current += delta;
+                fireTimerRef.current += delta;
                 fadeRef.current = Math.max(0, 1 - timerRef.current * BREATH_TIMING.fadeSpeed);
+                // If total fire time exceeds 1s, force fade to 0
+                if (fireTimerRef.current >= 1.0) {
+                    fadeRef.current = 0;
+                }
                 if (fadeRef.current <= 0.01) {
                     breathStatus.current.isFiring = false;
                     breathStatus.current.isMouthOpen = false;
                     breathStatus.current.isRoaring = false;
                     fireHoldRef.current = 0;
+                    fireTimerRef.current = 0;
                     setState('IDLE');
                     nextTriggerTime.current = time + BREATH_TIMING.idleDelayMin + Math.random() * BREATH_TIMING.idleDelayJitter; // Random delay
                 }
