@@ -118,6 +118,7 @@ interface UIOverlayProps {
 }
 
 export const joystickState = { x: 0, y: 0 };
+export const fireButtonState = { pressed: false };
 
 const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
   const stickRef = useRef<HTMLDivElement>(null);
@@ -148,22 +149,27 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
     const baseRect = baseRef.current.getBoundingClientRect();
     const centerX = baseRect.left + baseRect.width / 2;
     const centerY = baseRect.top + baseRect.height / 2;
-
     const maxDist = baseRect.width / 2;
-
     let dx = touch.clientX - centerX;
     let dy = touch.clientY - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
-
     if (distance > maxDist) {
       const angle = Math.atan2(dy, dx);
       dx = Math.cos(angle) * maxDist;
       dy = Math.sin(angle) * maxDist;
     }
-
     setPos({ x: dx, y: dy });
     joystickState.x = dx / maxDist;
     joystickState.y = -(dy / maxDist); 
+  };
+
+  const handleFireDown = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    fireButtonState.pressed = true;
+  };
+  const handleFireUp = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    fireButtonState.pressed = false;
   };
 
   return (
@@ -186,6 +192,18 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ isFading }) => {
           />
         </div>
       </div>
+
+      <button 
+        className="fire-button"
+        onMouseDown={handleFireDown}
+        onMouseUp={handleFireUp}
+        onMouseLeave={handleFireUp}
+        onTouchStart={handleFireDown}
+        onTouchEnd={handleFireUp}
+        aria-label="Fire"
+      >
+        🔥
+      </button>
     </>
   );
 };
@@ -198,7 +216,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Group, MathUtils, BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry } from 'three';
 import { useInput } from 'useInput';
-import { joystickState } from 'UIOverlay';
+import { joystickState, fireButtonState } from 'UIOverlay';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 
@@ -240,6 +258,10 @@ const MOUTH_CONFIG = {
 const checkTrigger = (pos: Vector3, target: Vector3, range: number) => {
   return pos.distanceTo(target) < range;
 };
+
+// --- 火焰設定（可調整） ---
+const FIRE_HIT_RADIUS = 2.4; // 火焰碰撞半徑（向下擴大以碰到小雞）
+const FIRE_VISUAL_LENGTH = 6; // 火焰視覺長度
 
 const PointsShape = ({ geometry, position, rotation, scale, color, size, opacity = 1 }: any) => {
     return (
